@@ -1,4 +1,4 @@
-import Observation
+import Perception
 import UIKit
 import UniformTypeIdentifiers
 
@@ -34,7 +34,7 @@ struct ClipboardEntry: Codable, Identifiable, Equatable {
 /// copied out of a password field (a Linux text input of the password purpose, or a
 /// pasteboard item marked concealed) is never kept, and nothing is while history is paused.
 /// Stored on this iPad only, in Application Support.
-@Observable @MainActor
+@Perceptible @MainActor
 final class ClipboardHistory {
     static let shared = ClipboardHistory(directory: ClipboardHistory.defaultDirectory)
 
@@ -50,12 +50,12 @@ final class ClipboardHistory {
         didSet { UserDefaults.standard.set(isPaused, forKey: Self.pausedKey) }
     }
 
-    @ObservationIgnored private let directory: URL
-    @ObservationIgnored private var observer: NSObjectProtocol?
+    @PerceptionIgnored private let directory: URL
+    @PerceptionIgnored private var observer: NSObjectProtocol?
     /// The pasteboard change this history made itself (restoring an entry).
-    @ObservationIgnored private var ownChangeCount = -1
+    @PerceptionIgnored private var ownChangeCount = -1
     /// Set while a Linux copy is put on the pasteboard, which reports it synchronously.
-    @ObservationIgnored private var isApplyingLinuxCopy = false
+    @PerceptionIgnored private var isApplyingLinuxCopy = false
 
     nonisolated static var defaultDirectory: URL {
         FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]

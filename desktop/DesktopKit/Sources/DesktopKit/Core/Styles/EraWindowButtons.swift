@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Window controls of the desktop themes' eras. Each keeps the same accessibility
 /// identifiers as the other styles and a hit area of at least 32 x 40 pt (44 in touch mode),
@@ -25,17 +26,19 @@ struct EraWindowButtons: View {
     }
 
     var body: some View {
-        HStack(spacing: spacing) {
-            ForEach(kinds, id: \.self) { kind in
-                EraWindowButton(skin: skin, kind: kind, isMaximized: isMaximized, isFocused: isFocused,
-                                isGroupHovered: isGroupHovered, metrics: metrics, height: titleBarHeight,
-                                isFirst: kind == kinds.first, isLast: kind == kinds.last) { perform(kind) }
-                    .accessibilityLabel(kind.label(isMaximized: isMaximized))
-                    .accessibilityIdentifier("desktop.window.\(kind.rawValue)")
+        WithPerceptionTracking {
+            HStack(spacing: spacing) {
+                ForEach(kinds, id: \.self) { kind in
+                    EraWindowButton(skin: skin, kind: kind, isMaximized: isMaximized, isFocused: isFocused,
+                                    isGroupHovered: isGroupHovered, metrics: metrics, height: titleBarHeight,
+                                    isFirst: kind == kinds.first, isLast: kind == kinds.last) { perform(kind) }
+                        .accessibilityLabel(kind.label(isMaximized: isMaximized))
+                        .accessibilityIdentifier("desktop.window.\(kind.rawValue)")
+                }
             }
+            .padding(.horizontal, outerPadding)
+            .onHover { isGroupHovered = $0 }
         }
-        .padding(.horizontal, outerPadding)
-        .onHover { isGroupHovered = $0 }
     }
 
     private var spacing: CGFloat {
@@ -71,13 +74,15 @@ private struct EraWindowButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            face
-                .frame(width: hitWidth, height: height, alignment: alignment)
-                .contentShape(Rectangle())
+        WithPerceptionTracking {
+            Button(action: action) {
+                face
+                    .frame(width: hitWidth, height: height, alignment: alignment)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
     }
 
     private var touch: Bool { metrics.isTouch }

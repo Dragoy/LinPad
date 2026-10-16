@@ -1,6 +1,6 @@
 import Foundation
 import MediaPlayer
-import Observation
+import Perception
 import UIKit
 
 /// One MPRIS player (a Linux app that plays media) as playerctl reports it.
@@ -88,7 +88,7 @@ enum MPRISCommand {
 /// Now Playing for Linux apps: the panel tile and widget read it, and the iPad's lock screen
 /// and Control Center drive it through MPRemoteCommandCenter. The guest is polled only while
 /// something that shows it is on screen (`start`/`stop` pairs).
-@Observable @MainActor
+@Perceptible @MainActor
 final class NowPlayingCenter {
     private static let interval: Duration = .seconds(1)
     /// playerctl is missing or the bus is down: try again now and then, not every second.
@@ -99,12 +99,12 @@ final class NowPlayingCenter {
     /// The guest has no playerctl (older rootfs); the tile says how to get it.
     private(set) var isPlayerctlMissing = false
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private var users = 0
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
-    @ObservationIgnored private var artworkKey = ""
-    @ObservationIgnored private var remoteIsRegistered = false
-    @ObservationIgnored private var backgroundObserver: NSObjectProtocol?
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private var users = 0
+    @PerceptionIgnored private var pollTask: Task<Void, Never>?
+    @PerceptionIgnored private var artworkKey = ""
+    @PerceptionIgnored private var remoteIsRegistered = false
+    @PerceptionIgnored private var backgroundObserver: NSObjectProtocol?
 
     init(host: any LinuxHost) {
         self.host = host

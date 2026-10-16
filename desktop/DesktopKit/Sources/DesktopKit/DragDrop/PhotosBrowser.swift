@@ -1,3 +1,4 @@
+import Perception
 import Photos
 import SwiftUI
 import UIKit
@@ -6,7 +7,7 @@ import UniformTypeIdentifiers
 /// The iPad photo library as a Files place. Photos stay in PhotoKit until they are used:
 /// opening, dragging or importing one exports the original to a host cache and copies it
 /// into the guest through the transfer service.
-@Observable @MainActor
+@Perceptible @MainActor
 final class PhotosLibraryModel {
     struct Album: Identifiable, Hashable {
         let id: String
@@ -25,8 +26,8 @@ final class PhotosLibraryModel {
     private(set) var busy: String?
     var errorMessage: String?
 
-    @ObservationIgnored let imageManager = PHCachingImageManager()
-    @ObservationIgnored private var exported: [String: URL] = [:]
+    @PerceptionIgnored let imageManager = PHCachingImageManager()
+    @PerceptionIgnored private var exported: [String: URL] = [:]
 
     var canBrowse: Bool { status == .authorized || status == .limited }
 
@@ -170,24 +171,26 @@ struct PhotosBrowserView: View {
     @State private var keyToken = 0
 
     var body: some View {
-        VStack(spacing: 0) {
-            if !model.canBrowse {
-                permissionView
-            } else {
-                header
-                if model.status == .limited {
-                    InlineBanner(kind: .info, message: "Files can see only the photos you selected.",
-                                 actionTitle: "Select More…", action: { model.presentLimitedPicker() })
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                if !model.canBrowse {
+                    permissionView
+                } else {
+                    header
+                    if model.status == .limited {
+                        InlineBanner(kind: .info, message: "Files can see only the photos you selected.",
+                                     actionTitle: "Select More…", action: { model.presentLimitedPicker() })
+                    }
+                    grid
                 }
-                grid
             }
+            .background {
+                KeyCommandHost(isActive: isFocused && model.canBrowse, focusToken: keyToken, onKey: handle(_:), onType: { _ in })
+                    .frame(width: 1, height: 1)
+            }
+            .task { model.reload() }
+            .onChangeCompat(of: model.albumID) { _, _ in model.reload() }
         }
-        .background {
-            KeyCommandHost(isActive: isFocused && model.canBrowse, focusToken: keyToken, onKey: handle(_:), onType: { _ in })
-                .frame(width: 1, height: 1)
-        }
-        .task { model.reload() }
-        .onChange(of: model.albumID) { _, _ in model.reload() }
     }
 
     private var permissionView: some View {
@@ -215,7 +218,7 @@ struct PhotosBrowserView: View {
 
     private var header: some View {
         HStack {
-            Picker("Album", selection: Binding(get: { model.albumID }, set: { model.albumID = $0 })) {
+            Picker("Album", selection: model.binding(\.albumID)) {
                 ForEach(model.albums) { album in Text(album.title).tag(album.id) }
             }
             .pickerStyle(.menu)
@@ -235,24 +238,26 @@ struct PhotosBrowserView: View {
         ScrollView {
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 110, maximum: 150), spacing: 6)], spacing: 6) {
                 ForEach(model.assets, id: \.localIdentifier) { asset in
-                    PhotoThumbnail(asset: asset, manager: model.imageManager,
-                                   isSelected: model.selection.contains(asset.localIdentifier))
-                        .onTapGesture(count: 2) { open(asset) }
-                        .simultaneousGesture(TapGesture().onEnded {
-                            if KeyboardModifiers.isCommandDown || KeyboardModifiers.isShiftDown {
-                                if model.selection.contains(asset.localIdentifier) { model.selection.remove(asset.localIdentifier) }
-                                else { model.selection.insert(asset.localIdentifier) }
-                            } else {
-                                model.selection = [asset.localIdentifier]
+                    WithPerceptionTracking {
+                        PhotoThumbnail(asset: asset, manager: model.imageManager,
+                                       isSelected: model.selection.contains(asset.localIdentifier))
+                            .onTapGesture(count: 2) { open(asset) }
+                            .simultaneousGesture(TapGesture().onEnded {
+                                if KeyboardModifiers.isCommandDown || KeyboardModifiers.isShiftDown {
+                                    if model.selection.contains(asset.localIdentifier) { model.selection.remove(asset.localIdentifier) }
+                                    else { model.selection.insert(asset.localIdentifier) }
+                                } else {
+                                    model.selection = [asset.localIdentifier]
+                                }
+                                keyToken += 1
+                            })
+                            .onDrag {
+                                if !model.selection.contains(asset.localIdentifier) { model.selection = [asset.localIdentifier] }
+                                return model.dragProvider(for: asset)
                             }
-                            keyToken += 1
-                        })
-                        .onDrag {
-                            if !model.selection.contains(asset.localIdentifier) { model.selection = [asset.localIdentifier] }
-                            return model.dragProvider(for: asset)
-                        }
-                        .contextMenu { menu(asset) }
-                        .accessibilityIdentifier("photos.asset")
+                            .contextMenu { menu(asset) }
+                            .accessibilityIdentifier("photos.asset")
+                    }
                 }
             }
             .padding(10)
@@ -344,28 +349,30 @@ private struct PhotoThumbnail: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Rectangle().fill(theme.primaryText.opacity(0.06))
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+        WithPerceptionTracking {
+            ZStack(alignment: .bottomTrailing) {
+                Rectangle().fill(theme.primaryText.opacity(0.06))
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
+                if asset.mediaType == .video {
+                    Text(Duration.seconds(asset.duration).formatted(.time(pattern: .minuteSecond)))
+                        .font(.caption2.weight(.semibold)).foregroundStyle(.white)
+                        .padding(4).shadow(radius: 2)
+                }
             }
-            if asset.mediaType == .video {
-                Text(Duration.seconds(asset.duration).formatted(.time(pattern: .minuteSecond)))
-                    .font(.caption2.weight(.semibold)).foregroundStyle(.white)
-                    .padding(4).shadow(radius: 2)
-            }
-        }
-        .frame(height: 120)
-        .clipped()
-        .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.accent, lineWidth: isSelected ? 3 : 0))
-        .contentShape(Rectangle())
-        .onAppear {
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .opportunistic
-            options.isNetworkAccessAllowed = true
-            manager.requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill,
-                                 options: options) { result, _ in
-                Task { @MainActor in image = result }
+            .frame(height: 120)
+            .clipped()
+            .overlay(RoundedRectangle(cornerRadius: 4).stroke(theme.accent, lineWidth: isSelected ? 3 : 0))
+            .contentShape(Rectangle())
+            .onAppear {
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .opportunistic
+                options.isNetworkAccessAllowed = true
+                manager.requestImage(for: asset, targetSize: CGSize(width: 300, height: 300), contentMode: .aspectFill,
+                                     options: options) { result, _ in
+                    Task { @MainActor in image = result }
+                }
             }
         }
     }

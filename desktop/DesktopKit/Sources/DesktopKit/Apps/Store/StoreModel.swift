@@ -1,3 +1,4 @@
+import Perception
 import Network
 import SwiftUI
 
@@ -5,7 +6,7 @@ import SwiftUI
 /// the install queue. Every install, removal and update goes through `linpad-apps` in the
 /// guest, one at a time (apk locks its database); onboarding, Settings and install links
 /// share this model, so progress started anywhere shows everywhere.
-@Observable @MainActor
+@Perceptible @MainActor
 final class StoreModel {
     private(set) var index: StoreIndex?
     private(set) var appsByID: [String: StoreApp] = [:]
@@ -39,17 +40,17 @@ final class StoreModel {
     private(set) var isOffline = false
 
     /// Called after an install or removal so the launcher re-reads the guest's .desktop files.
-    @ObservationIgnored var onAppsChanged: (@MainActor () async -> Void)?
+    @PerceptionIgnored var onAppsChanged: (@MainActor () async -> Void)?
 
-    @ObservationIgnored let host: any LinuxHost
-    @ObservationIgnored private var started = false
-    @ObservationIgnored private var draining = false
-    @ObservationIgnored private var iconsPending = false
-    @ObservationIgnored private var pathMonitor: NWPathMonitor?
+    @PerceptionIgnored let host: any LinuxHost
+    @PerceptionIgnored private var started = false
+    @PerceptionIgnored private var draining = false
+    @PerceptionIgnored private var iconsPending = false
+    @PerceptionIgnored private var pathMonitor: NWPathMonitor?
     private static let maxLogLines = 600
     private static let historyLimit = 20
 
-    @ObservationIgnored private static var models: [ObjectIdentifier: StoreModel] = [:]
+    @PerceptionIgnored private static var models: [ObjectIdentifier: StoreModel] = [:]
 
     static func shared(for host: any LinuxHost) -> StoreModel {
         let key = ObjectIdentifier(host)

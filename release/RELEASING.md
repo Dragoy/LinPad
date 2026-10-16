@@ -155,7 +155,7 @@ Run these on the Mac, one build at a time. Temporary data stays on `/Volumes/Ext
   ETag caching):
 
   ```sh
-  cd desktop/DesktopKit && xcodebuild test -scheme DesktopKit \
+  cd desktop/DesktopKit && xcodebuild test -skipMacroValidation -scheme DesktopKit \
     -destination 'platform=iOS Simulator,name=iPad Air 13-inch (M3)' \
     -only-testing:DesktopKitTests/ReleaseFeedTests
   ```

@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 import WebKit
@@ -109,15 +110,15 @@ final class BrowserWebDelegate: NSObject, WKNavigationDelegate, WKUIDelegate {
 }
 
 @MainActor
-@Observable
+@Perceptible
 final class BrowserModel {
-    @ObservationIgnored let webView: WKWebView
-    @ObservationIgnored private let window: any WindowHandle
-    @ObservationIgnored private let delegate = BrowserWebDelegate()
-    @ObservationIgnored private let pageMenu = BrowserPageMenu()
-    @ObservationIgnored private var observations: [NSKeyValueObservation] = []
-    @ObservationIgnored private var didStart = false
-    @ObservationIgnored private let initialAddress: String
+    @PerceptionIgnored let webView: WKWebView
+    @PerceptionIgnored private let window: any WindowHandle
+    @PerceptionIgnored private let delegate = BrowserWebDelegate()
+    @PerceptionIgnored private let pageMenu = BrowserPageMenu()
+    @PerceptionIgnored private var observations: [NSKeyValueObservation] = []
+    @PerceptionIgnored private var didStart = false
+    @PerceptionIgnored private let initialAddress: String
 
     var addressText: String
     private(set) var pageTitle = ""
@@ -134,7 +135,9 @@ final class BrowserModel {
         configuration.websiteDataStore = .default()
         webView = WKWebView(frame: .zero, configuration: configuration)
         webView.allowsBackForwardNavigationGestures = true
-        webView.isInspectable = true
+        if #available(iOS 16.4, *) {
+            webView.isInspectable = true
+        }
         window = context.window
         initialAddress = context.arguments[AppArgument.url] ?? BrowserApp.defaultURL
         addressText = initialAddress
@@ -274,23 +277,25 @@ struct BrowserAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            progressBar
-            if let message = model.errorMessage {
-                InlineBanner(kind: .error, message: message, actionTitle: "Retry",
-                             action: { model.go(to: model.addressText) },
-                             onDismiss: { model.errorMessage = nil })
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                progressBar
+                if let message = model.errorMessage {
+                    InlineBanner(kind: .error, message: message, actionTitle: "Retry",
+                                 action: { model.go(to: model.addressText) },
+                                 onDismiss: { model.errorMessage = nil })
+                }
+                WebViewRepresentable(webView: model.webView)
+                    .background(Color.white)
             }
-            WebViewRepresentable(webView: model.webView)
-                .background(Color.white)
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .animation(.easeOut(duration: 0.18), value: model.errorMessage)
-        .task { model.startIfNeeded() }
-        .onChange(of: model.currentURL) { _, url in
-            if !addressFocused, let url { model.addressText = url.absoluteString }
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .animation(.easeOut(duration: 0.18), value: model.errorMessage)
+            .task { model.startIfNeeded() }
+            .onChangeCompat(of: model.currentURL) { _, url in
+                if !addressFocused, let url { model.addressText = url.absoluteString }
+            }
         }
     }
 
@@ -305,7 +310,9 @@ struct BrowserAppView: View {
             addressField
                 .padding(.horizontal, 4)
             ForEach(Self.quickPorts, id: \.self) { port in
-                quickPortButton(port)
+                WithPerceptionTracking {
+                    quickPortButton(port)
+                }
             }
         }
     }
@@ -315,7 +322,7 @@ struct BrowserAppView: View {
             Image(systemName: model.currentURL?.scheme == "https" ? "lock.fill" : "globe")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundStyle(theme.secondaryText)
-            TextField("Enter address or localhost:port", text: $model.addressText)
+            TextField("Enter address or localhost:port", text: model.binding(\.addressText))
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
                 .keyboardType(.URL)
@@ -356,11 +363,13 @@ struct BrowserAppView: View {
 
     private var progressBar: some View {
         GeometryReader { proxy in
-            Rectangle()
-                .fill(theme.accent)
-                .frame(width: proxy.size.width * model.progress)
-                .opacity(model.isLoading ? 1 : 0)
-                .animation(.easeOut(duration: 0.2), value: model.progress)
+            WithPerceptionTracking {
+                Rectangle()
+                    .fill(theme.accent)
+                    .frame(width: proxy.size.width * model.progress)
+                    .opacity(model.isLoading ? 1 : 0)
+                    .animation(.easeOut(duration: 0.2), value: model.progress)
+            }
         }
         .frame(height: 2)
     }

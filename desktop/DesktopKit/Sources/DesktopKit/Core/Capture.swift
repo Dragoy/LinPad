@@ -1,4 +1,5 @@
 import ReplayKit
+import Perception
 import SwiftUI
 import UIKit
 
@@ -186,43 +187,45 @@ struct RegionCaptureView: View {
     }
 
     var body: some View {
-        GeometryReader { _ in
-            ZStack(alignment: .topLeading) {
-                Color.black.opacity(0.25)
-                if let selection {
-                    Rectangle()
-                        .fill(Color.white.opacity(0.08))
-                        .overlay(Rectangle().strokeBorder(theme.accent, lineWidth: 2))
-                        .frame(width: selection.width, height: selection.height)
-                        .offset(x: selection.minX, y: selection.minY)
-                    Text("\(Int(selection.width)) × \(Int(selection.height))")
-                        .font(.caption.monospaced())
-                        .padding(4)
-                        .background(Capsule().fill(.black.opacity(0.6)))
-                        .foregroundStyle(.white)
-                        .offset(x: selection.minX, y: max(selection.minY - 26, 0))
-                } else {
-                    Text("Drag to capture an area · Esc cancels")
-                        .font(.callout.weight(.medium))
-                        .padding(.horizontal, 14).padding(.vertical, 8)
-                        .background(Capsule().fill(.black.opacity(0.6)))
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WithPerceptionTracking {
+            GeometryReader { _ in
+                ZStack(alignment: .topLeading) {
+                    Color.black.opacity(0.25)
+                    if let selection {
+                        Rectangle()
+                            .fill(Color.white.opacity(0.08))
+                            .overlay(Rectangle().strokeBorder(theme.accent, lineWidth: 2))
+                            .frame(width: selection.width, height: selection.height)
+                            .offset(x: selection.minX, y: selection.minY)
+                        Text("\(Int(selection.width)) × \(Int(selection.height))")
+                            .font(.caption.monospaced())
+                            .padding(4)
+                            .background(Capsule().fill(.black.opacity(0.6)))
+                            .foregroundStyle(.white)
+                            .offset(x: selection.minX, y: max(selection.minY - 26, 0))
+                    } else {
+                        Text("Drag to capture an area · Esc cancels")
+                            .font(.callout.weight(.medium))
+                            .padding(.horizontal, 14).padding(.vertical, 8)
+                            .background(Capsule().fill(.black.opacity(0.6)))
+                            .foregroundStyle(.white)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
+                .contentShape(Rectangle())
+                .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        start = start ?? value.startLocation
+                        current = value.location
+                    }
+                    .onEnded { _ in
+                        let region = selection.flatMap { $0.width > 8 && $0.height > 8 ? $0 : nil }
+                        start = nil
+                        current = nil
+                        controller.finishRegionCapture(region)
+                    })
             }
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { value in
-                    start = start ?? value.startLocation
-                    current = value.location
-                }
-                .onEnded { _ in
-                    let region = selection.flatMap { $0.width > 8 && $0.height > 8 ? $0 : nil }
-                    start = nil
-                    current = nil
-                    controller.finishRegionCapture(region)
-                })
+            .accessibilityIdentifier("desktop.regionCapture")
         }
-        .accessibilityIdentifier("desktop.regionCapture")
     }
 }

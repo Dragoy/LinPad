@@ -1,6 +1,6 @@
 import Foundation
 import MetricKit
-import Observation
+import Perception
 import OSLog
 import UIKit
 
@@ -18,7 +18,7 @@ public protocol LinuxDiagnosticsProviding: AnyObject {
 /// Crash and hang bookkeeping for the whole app: the unclean-exit marker, MetricKit
 /// payloads, the main-thread and guest watchdogs, and the events the diagnostics export
 /// lists. Nothing here leaves the iPad unless the user shares an export.
-@Observable @MainActor
+@Perceptible @MainActor
 public final class DiagnosticsCenter {
     public static let shared = DiagnosticsCenter()
 
@@ -31,29 +31,29 @@ public final class DiagnosticsCenter {
     /// The guest stopped answering; cleared when it answers again.
     private(set) var guestIsUnresponsive = false
 
-    @ObservationIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
-    @ObservationIgnored var restartSession: (() async -> Void)?
-    @ObservationIgnored var showRepair: (() -> Void)?
+    @PerceptionIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
+    @PerceptionIgnored var restartSession: (() async -> Void)?
+    @PerceptionIgnored var showRepair: (() -> Void)?
 
     let directory: URL
     /// systemUptime when the app started, for the export's "running for" line.
     let launchUptime = ProcessInfo.processInfo.systemUptime
-    @ObservationIgnored private let now: () -> Date
-    @ObservationIgnored private var marker: DiagnosticsSessionMarker?
-    @ObservationIgnored private var began = false
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var metricSubscriber: MetricSubscriber?
-    @ObservationIgnored private var mainWatchdog: MainThreadWatchdog?
-    @ObservationIgnored private var heartbeatTask: Task<Void, Never>?
-    @ObservationIgnored private var snapshotTask: Task<Void, Never>?
-    @ObservationIgnored private var lastStallToast: Date?
-    @ObservationIgnored private weak var diagnosticsHost: (any LinuxDiagnosticsProviding)?
+    @PerceptionIgnored private let now: () -> Date
+    @PerceptionIgnored private var marker: DiagnosticsSessionMarker?
+    @PerceptionIgnored private var began = false
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private var metricSubscriber: MetricSubscriber?
+    @PerceptionIgnored private var mainWatchdog: MainThreadWatchdog?
+    @PerceptionIgnored private var heartbeatTask: Task<Void, Never>?
+    @PerceptionIgnored private var snapshotTask: Task<Void, Never>?
+    @PerceptionIgnored private var lastStallToast: Date?
+    @PerceptionIgnored private weak var diagnosticsHost: (any LinuxDiagnosticsProviding)?
     private static let logger = Logger(subsystem: "DesktopKit", category: "Diagnostics")
     static let maxEvents = 200
     static let maxPayloads = 10
 
-    @ObservationIgnored private let isInForeground: @MainActor () -> Bool
-    @ObservationIgnored private let observesSystem: Bool
+    @PerceptionIgnored private let isInForeground: @MainActor () -> Bool
+    @PerceptionIgnored private let observesSystem: Bool
 
     /// `observesSystem` false (tests): no app notifications, MetricKit or watchdog threads.
     init(directory: URL? = nil, now: @escaping () -> Date = Date.init,

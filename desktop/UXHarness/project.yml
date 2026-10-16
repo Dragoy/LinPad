@@ -5,7 +5,7 @@ name: DesktopUX
 options:
   bundleIdPrefix: com.valentinneagu.desktopux
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "16.0"
 packages:
   DesktopKit:
     path: ../DesktopKit

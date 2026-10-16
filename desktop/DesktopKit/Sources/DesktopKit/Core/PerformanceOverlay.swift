@@ -1,10 +1,10 @@
 import SwiftUI
-import Observation
+import Perception
 import QuartzCore
 
 /// Frame pacing and memory measured on the device itself: frames per second, mean and
 /// worst frame time over the last half second, and the app's physical memory footprint.
-@Observable @MainActor
+@Perceptible @MainActor
 final class FrameMonitor {
     private(set) var framesPerSecond: Double = 0
     private(set) var meanFrameTime: Double = 0
@@ -12,10 +12,10 @@ final class FrameMonitor {
     private(set) var memoryFootprint: UInt64 = 0
     private(set) var maximumFramesPerSecond = 60
 
-    @ObservationIgnored private var link: CADisplayLink?
-    @ObservationIgnored private var lastTimestamp: CFTimeInterval = 0
-    @ObservationIgnored private var intervals: [CFTimeInterval] = []
-    @ObservationIgnored private var windowStart: CFTimeInterval = 0
+    @PerceptionIgnored private var link: CADisplayLink?
+    @PerceptionIgnored private var lastTimestamp: CFTimeInterval = 0
+    @PerceptionIgnored private var intervals: [CFTimeInterval] = []
+    @PerceptionIgnored private var windowStart: CFTimeInterval = 0
 
     private static let sampleWindow: CFTimeInterval = 0.5
 
@@ -82,21 +82,23 @@ struct PerformanceOverlay: View {
     @State private var monitor = FrameMonitor()
 
     var body: some View {
-        VStack(alignment: .trailing, spacing: 2) {
-            Text("\(Int(monitor.framesPerSecond.rounded())) / \(monitor.maximumFramesPerSecond) fps")
-                .foregroundStyle(fpsColor)
-            Text(String(format: "%.1f ms avg · %.1f ms worst", monitor.meanFrameTime, monitor.worstFrameTime))
-            Text(ByteCountFormatter.string(fromByteCount: Int64(monitor.memoryFootprint), countStyle: .memory))
+        WithPerceptionTracking {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("\(Int(monitor.framesPerSecond.rounded())) / \(monitor.maximumFramesPerSecond) fps")
+                    .foregroundStyle(fpsColor)
+                Text(String(format: "%.1f ms avg · %.1f ms worst", monitor.meanFrameTime, monitor.worstFrameTime))
+                Text(ByteCountFormatter.string(fromByteCount: Int64(monitor.memoryFootprint), countStyle: .memory))
+            }
+            .font(.system(size: 11, weight: .semibold, design: .monospaced))
+            .foregroundStyle(Color.white)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .onAppear { monitor.start() }
+            .onDisappear { monitor.stop() }
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("desktop.performance")
         }
-        .font(.system(size: 11, weight: .semibold, design: .monospaced))
-        .foregroundStyle(Color.white)
-        .padding(.horizontal, 10)
-        .padding(.vertical, 7)
-        .background(Color.black.opacity(0.72), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-        .onAppear { monitor.start() }
-        .onDisappear { monitor.stop() }
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("desktop.performance")
     }
 
     private var fpsColor: Color {

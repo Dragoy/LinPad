@@ -1,9 +1,9 @@
 import Foundation
-import Observation
+import Perception
 
 /// The desktop's widgets: what is placed where, edit mode, and the shared data some of
 /// them show (weather, disk usage).
-@Observable @MainActor
+@Perceptible @MainActor
 final class DesktopWidgetStore {
     private(set) var board: WidgetBoard
     var isEditing = false {
@@ -16,7 +16,7 @@ final class DesktopWidgetStore {
     let weather = WeatherModel()
     let disk = DiskUsageMonitor()
 
-    @ObservationIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -74,7 +74,7 @@ final class DesktopWidgetStore {
 }
 
 /// `df` for the root filesystem, sampled once a minute while a System Monitor widget shows it.
-@Observable @MainActor
+@Perceptible @MainActor
 final class DiskUsageMonitor {
     struct Usage: Equatable {
         var usedBytes: Int64

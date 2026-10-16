@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Artwork, title and artist with previous / play-pause / next, for Quick Settings and the
 /// Now Playing widget. Polls the guest while it is on screen.
@@ -8,33 +9,35 @@ struct NowPlayingCard: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        HStack(spacing: 10) {
-            artwork
-            VStack(alignment: .leading, spacing: 2) {
-                Text(center.player?.displayTitle ?? "Not Playing")
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
-                    .accessibilityIdentifier("nowPlaying.title")
-                Text(subtitle)
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.secondaryText)
-                    .lineLimit(isCompact ? 1 : 2)
+        WithPerceptionTracking {
+            HStack(spacing: 10) {
+                artwork
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(center.player?.displayTitle ?? "Not Playing")
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+                        .accessibilityIdentifier("nowPlaying.title")
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.secondaryText)
+                        .lineLimit(isCompact ? 1 : 2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(spacing: 2) {
+                    control("backward.fill", label: "Previous", command: .previous)
+                    control(center.player?.isPlaying == true ? "pause.fill" : "play.fill",
+                            label: center.player?.isPlaying == true ? "Pause" : "Play", command: .playPause, size: 18)
+                    control("forward.fill", label: "Next", command: .next)
+                }
+                .disabled(center.player == nil)
+                .opacity(center.player == nil ? 0.4 : 1)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            HStack(spacing: 2) {
-                control("backward.fill", label: "Previous", command: .previous)
-                control(center.player?.isPlaying == true ? "pause.fill" : "play.fill",
-                        label: center.player?.isPlaying == true ? "Pause" : "Play", command: .playPause, size: 18)
-                control("forward.fill", label: "Next", command: .next)
-            }
-            .disabled(center.player == nil)
-            .opacity(center.player == nil ? 0.4 : 1)
+            .foregroundStyle(theme.primaryText)
+            .onAppear { center.start() }
+            .onDisappear { center.stop() }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("nowPlaying")
         }
-        .foregroundStyle(theme.primaryText)
-        .onAppear { center.start() }
-        .onDisappear { center.stop() }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("nowPlaying")
     }
 
     private var subtitle: String {

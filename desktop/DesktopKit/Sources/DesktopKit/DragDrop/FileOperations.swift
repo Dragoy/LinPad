@@ -1,9 +1,9 @@
 import Foundation
-import Observation
+import Perception
 
 /// The desktop-wide file clipboard (Cut/Copy/Paste between Files windows and the desktop),
 /// separate from the text pasteboard, as in Thunar and Nautilus.
-@Observable @MainActor
+@Perceptible @MainActor
 final class FileClipboard {
     static let shared = FileClipboard()
 

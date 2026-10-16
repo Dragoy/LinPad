@@ -1,6 +1,6 @@
 # Installing Linux for iPad on the iPad
 
-Target: iPad Air 11-inch (M3), UDID `<DEVICE_UDID>`, iPadOS 17 or later.
+Target: iPad Air 11-inch (M3), UDID `<DEVICE_UDID>`, iPadOS 16 or later.
 Team `<TEAM_ID>`; bundle id `com.valentinneagu.ish.arm64` (unchanged by the rename to "Linux for iPad": the home-screen name changes, the app keeps its data). The build output is still `iSH ARM64.app`.
 
 ## 1. What gets installed
@@ -29,8 +29,8 @@ To rebuild from scratch:
 ```sh
 cd /Volumes/ExternalHD/Dev/ish-arm64
 export PATH=/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:$PATH
-xcodebuild -project iSH.xcodeproj -target iSH-ARM64 -configuration Release -sdk iphoneos \
-  -allowProvisioningUpdates SYMROOT=$PWD/build-ios-release IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+xcodebuild -skipMacroValidation -project iSH.xcodeproj -target iSH-ARM64 -configuration Release -sdk iphoneos \
+  -allowProvisioningUpdates SYMROOT=$PWD/build-ios-release IPHONEOS_DEPLOYMENT_TARGET=16.0 \
   DEVELOPMENT_TEAM=<TEAM_ID> ISH_JIT_BUILD=enabled build
 release/embed-rootfs.sh --device "build-ios-release/Release-iphoneos/iSH ARM64.app" \
   release/out/ish-linux-rootfs-arm64.tar.gz

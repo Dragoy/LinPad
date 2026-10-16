@@ -1,68 +1,71 @@
+import Perception
 import SwiftUI
 
 /// "Make it yours": layout style, colour theme, light/dark and wallpaper, each applied to
 /// the desktop behind the sheet the moment it is picked.
 struct OnboardingPersonalize: View {
-    @Bindable var flow: OnboardingFlow
+    @Perception.Bindable var flow: OnboardingFlow
     let controller: DesktopController
     @Environment(\.desktopTheme) private var theme
     @Environment(\.desktopStyleTheme) private var styleTheme
     @Environment(\.horizontalSizeClass) private var sizeClass
 
     var body: some View {
-        let layout = sizeClass == .compact
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 26))
-            : AnyLayout(HStackLayout(alignment: .top, spacing: 32))
-        ScrollView {
-            layout {
-                section("Layout", detail: "Where the panels, launcher and window buttons go.") {
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 128, maximum: 200), spacing: 12)], spacing: 12) {
-                        ForEach(DesktopStyle.groups) { group in
-                            Section {
-                                ForEach(group.styles) { style in styleTile(style) }
-                            } header: {
-                                Text(group.title)
-                                    .font(.footnote.weight(.semibold))
-                                    .foregroundStyle(theme.secondaryText)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .accessibilityAddTraits(.isHeader)
+        WithPerceptionTracking {
+            let layout = sizeClass == .compact
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 26))
+                : AnyLayout(HStackLayout(alignment: .top, spacing: 32))
+            ScrollView {
+                layout {
+                    section("Layout", detail: "Where the panels, launcher and window buttons go.") {
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 128, maximum: 200), spacing: 12)], spacing: 12) {
+                            ForEach(DesktopStyle.groups) { group in
+                                Section {
+                                    ForEach(group.styles) { style in WithPerceptionTracking { styleTile(style) } }
+                                } header: {
+                                    Text(group.title)
+                                        .font(.footnote.weight(.semibold))
+                                        .foregroundStyle(theme.secondaryText)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        .accessibilityAddTraits(.isHeader)
+                                }
                             }
                         }
                     }
-                }
-                .frame(maxWidth: sizeClass == .compact ? .infinity : 430)
-                VStack(alignment: .leading, spacing: 26) {
-                    section("Color theme", detail: "Recolours the desktop and Linux apps.") { themeStrip }
-                    section("Appearance", detail: appearanceDetail) {
-                        Picker("Appearance", selection: $flow.choices.appearance) {
-                            Text("Style").tag(DesktopAppearance.styleDefault.rawValue)
-                            Text("Auto").tag(DesktopAppearance.system.rawValue)
-                            Text("Light").tag(DesktopAppearance.light.rawValue)
-                            Text("Dark").tag(DesktopAppearance.dark.rawValue)
+                    .frame(maxWidth: sizeClass == .compact ? .infinity : 430)
+                    VStack(alignment: .leading, spacing: 26) {
+                        section("Color theme", detail: "Recolours the desktop and Linux apps.") { themeStrip }
+                        section("Appearance", detail: appearanceDetail) {
+                            Picker("Appearance", selection: flow.binding(\.choices).appearance) {
+                                Text("Style").tag(DesktopAppearance.styleDefault.rawValue)
+                                Text("Auto").tag(DesktopAppearance.system.rawValue)
+                                Text("Light").tag(DesktopAppearance.light.rawValue)
+                                Text("Dark").tag(DesktopAppearance.dark.rawValue)
+                            }
+                            .pickerStyle(.segmented)
+                            .disabled(!flow.choices.colorTheme.isEmpty)
+                            .accessibilityIdentifier("onboarding.appearance")
                         }
-                        .pickerStyle(.segmented)
-                        .disabled(!flow.choices.colorTheme.isEmpty)
-                        .accessibilityIdentifier("onboarding.appearance")
-                    }
-                    section("Wallpaper", detail: nil) { wallpaperRow }
-                    Toggle(isOn: $flow.choices.autoTiling) {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Tile windows automatically").font(.system(.callout, weight: .medium))
-                            Text("New windows share the screen instead of overlapping.")
-                                .font(.footnote)
-                                .foregroundStyle(theme.secondaryText)
+                        section("Wallpaper", detail: nil) { wallpaperRow }
+                        Toggle(isOn: flow.binding(\.choices).autoTiling) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Tile windows automatically").font(.system(.callout, weight: .medium))
+                                Text("New windows share the screen instead of overlapping.")
+                                    .font(.footnote)
+                                    .foregroundStyle(theme.secondaryText)
+                            }
                         }
+                        .tint(theme.accent)
+                        .accessibilityIdentifier("onboarding.autoTiling")
                     }
-                    .tint(theme.accent)
-                    .accessibilityIdentifier("onboarding.autoTiling")
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.bottom, 8)
             }
-            .padding(.bottom, 8)
-        }
-        .scrollBounceBehavior(.basedOnSize)
-        .onChange(of: flow.choices, initial: true) { _, choices in
-            withAnimation(DesktopMotion.standard) { controller.previewOnboardingChoices(choices) }
+            .scrollBounceBasedOnSizeCompat()
+            .onChangeCompat(of: flow.choices, initial: true) { _, choices in
+                withAnimation(DesktopMotion.standard) { controller.previewOnboardingChoices(choices) }
+            }
         }
     }
 
@@ -125,7 +128,7 @@ struct OnboardingPersonalize: View {
         ScrollViewReader { proxy in
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
-                    ForEach(controller.colorThemes.orderedIDs, id: \.self) { id in themeCard(id) }
+                    ForEach(controller.colorThemes.orderedIDs, id: \.self) { id in WithPerceptionTracking { themeCard(id) } }
                 }
                 .padding(.vertical, 3)
                 .padding(.horizontal, 2)
@@ -166,13 +169,17 @@ struct OnboardingPersonalize: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(DesktopWallpaper.allCases, id: \.self) { gradient in
-                    wallpaperTile(WallpaperSource.gradient(gradient.rawValue), label: gradient.rawValue.capitalized) {
-                        gradient.view
+                    WithPerceptionTracking {
+                        wallpaperTile(WallpaperSource.gradient(gradient.rawValue), label: gradient.rawValue.capitalized) {
+                            gradient.view
+                        }
                     }
                 }
                 ForEach(controller.wallpapers.library.filter { $0.origin == .builtIn }) { item in
-                    wallpaperTile(.image(item.id), label: item.id.replacingOccurrences(of: BuiltInWallpapers.prefix, with: "").capitalized) {
-                        WallpaperThumbnail(store: controller.wallpapers, item: item)
+                    WithPerceptionTracking {
+                        wallpaperTile(.image(item.id), label: item.id.replacingOccurrences(of: BuiltInWallpapers.prefix, with: "").capitalized) {
+                            WallpaperThumbnail(store: controller.wallpapers, item: item)
+                        }
                     }
                 }
                 wallhavenTile
@@ -235,17 +242,19 @@ struct StyleThumbnail: View {
     let accent: Color
 
     var body: some View {
-        GeometryReader { proxy in
-            let size = proxy.size
-            let bar = max(7, size.height * 0.075)
-            ZStack(alignment: .topLeading) {
-                LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.22), Color(red: 0.24, green: 0.16, blue: 0.36)],
-                               startPoint: .topLeading, endPoint: .bottomTrailing)
-                windows(in: windowArea(size: size, bar: bar), corner: min(spec.cornerRadius, 8) * 0.5)
-                chrome(size: size, bar: bar)
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                let size = proxy.size
+                let bar = max(7, size.height * 0.075)
+                ZStack(alignment: .topLeading) {
+                    LinearGradient(colors: [Color(red: 0.10, green: 0.12, blue: 0.22), Color(red: 0.24, green: 0.16, blue: 0.36)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                    windows(in: windowArea(size: size, bar: bar), corner: min(spec.cornerRadius, 8) * 0.5)
+                    chrome(size: size, bar: bar)
+                }
             }
+            .accessibilityHidden(true)
         }
-        .accessibilityHidden(true)
     }
 
     private func windowArea(size: CGSize, bar: CGFloat) -> CGRect {

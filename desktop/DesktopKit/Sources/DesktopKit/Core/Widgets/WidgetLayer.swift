@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// Widgets on the desktop, under the windows and over the icons. Outside edit mode only the
@@ -23,31 +24,37 @@ struct WidgetLayer: View {
     private var workspace: Int { controller.windowManager.currentWorkspace }
 
     var body: some View {
-        GeometryReader { proxy in
-            let grid = WidgetGrid(size: proxy.size)
-            ZStack(alignment: .topLeading) {
-                if store.isEditing {
-                    editBackdrop(grid, size: proxy.size)
-                }
-                ForEach(store.widgets(workspace: workspace)) { widget in
-                    widgetView(widget, grid: grid)
-                }
-                if store.isEditing {
-                    editBar
-                        .frame(width: proxy.size.width)
-                        .padding(.top, 10)
-                        .transition(.move(edge: .top).combined(with: .opacity))
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                WithPerceptionTracking {
+                    let grid = WidgetGrid(size: proxy.size)
+                    ZStack(alignment: .topLeading) {
+                        if store.isEditing {
+                            editBackdrop(grid, size: proxy.size)
+                        }
+                        ForEach(store.widgets(workspace: workspace)) { widget in
+                            WithPerceptionTracking {
+                                widgetView(widget, grid: grid)
+                            }
+                        }
+                        if store.isEditing {
+                            editBar
+                                .frame(width: proxy.size.width)
+                                .padding(.top, 10)
+                                .transition(.move(edge: .top).combined(with: .opacity))
+                        }
+                    }
+                    .onChangeCompat(of: grid, initial: true) { _, grid in store.grid = grid }
                 }
             }
-            .onChange(of: grid, initial: true) { _, grid in store.grid = grid }
+            .environment(\.widgetsAreLive, scenePhase == .active && !controller.isLocked)
+            .background {
+                WidgetKeyHost(isActive: store.isEditing, onKey: handle)
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
+            }
+            .animation(DesktopMotion.quick, value: store.isEditing)
         }
-        .environment(\.widgetsAreLive, scenePhase == .active && !controller.isLocked)
-        .background {
-            WidgetKeyHost(isActive: store.isEditing, onKey: handle)
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
-        }
-        .animation(DesktopMotion.quick, value: store.isEditing)
     }
 
     // MARK: Widgets
@@ -245,7 +252,7 @@ struct WidgetLayer: View {
             .menuStyle(.button)
             .buttonStyle(.plain)
             .accessibilityIdentifier("widgets.add")
-            Toggle(isOn: Binding(get: { store.scope == .perWorkspace }, set: { perWorkspace in
+            Toggle(isOn: Binding(tracking: { store.scope == .perWorkspace }, set: { perWorkspace in
                 store.setScope(perWorkspace ? .perWorkspace : .global, currentWorkspace: workspace)
             })) {
                 Label("Per Workspace", systemImage: "square.stack.3d.up")
@@ -318,19 +325,21 @@ struct WidgetChrome<Content: View>: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        let shape = RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
-        content()
-            .padding(12)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .foregroundStyle(theme.primaryText)
-            .background {
-                shape.fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
-                shape.fill(theme.panelBackground)
-            }
-            .clipShape(shape)
-            .overlay(shape.strokeBorder(isSelected ? theme.accent : theme.separator, lineWidth: isSelected ? 2 : 1))
-            .shadow(color: .black.opacity(isEditing ? 0.35 : 0.2), radius: isEditing ? 14 : 8, y: 4)
-            .scaleEffect(isEditing ? 0.98 : 1)
+        WithPerceptionTracking {
+            let shape = RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
+            content()
+                .padding(12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .foregroundStyle(theme.primaryText)
+                .background {
+                    shape.fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+                    shape.fill(theme.panelBackground)
+                }
+                .clipShape(shape)
+                .overlay(shape.strokeBorder(isSelected ? theme.accent : theme.separator, lineWidth: isSelected ? 2 : 1))
+                .shadow(color: .black.opacity(isEditing ? 0.35 : 0.2), radius: isEditing ? 14 : 8, y: 4)
+                .scaleEffect(isEditing ? 0.98 : 1)
+        }
     }
 }
 

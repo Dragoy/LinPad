@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 // The panels of the desktop themes' eras. DesktopRootView asks for "the style's taskbar",
 // "menu bar", "top bar" and "Dock"; these pick the era's own when the style has a skin and
@@ -9,10 +10,12 @@ struct StyleTaskbar: View {
     @Environment(\.desktopStyle) private var style
 
     var body: some View {
-        if let skin = style.spec.skin {
-            EraTaskbar(controller: controller, skin: skin)
-        } else {
-            WindowsTaskbar(controller: controller)
+        WithPerceptionTracking {
+            if let skin = style.spec.skin {
+                EraTaskbar(controller: controller, skin: skin)
+            } else {
+                WindowsTaskbar(controller: controller)
+            }
         }
     }
 }
@@ -22,10 +25,12 @@ struct StyleMenuBar: View {
     @Environment(\.desktopStyle) private var style
 
     var body: some View {
-        if let skin = style.spec.skin {
-            EraMenuBar(controller: controller, skin: skin)
-        } else {
-            MenuBar(controller: controller)
+        WithPerceptionTracking {
+            if let skin = style.spec.skin {
+                EraMenuBar(controller: controller, skin: skin)
+            } else {
+                MenuBar(controller: controller)
+            }
         }
     }
 }
@@ -35,10 +40,12 @@ struct StyleTopBar: View {
     @Environment(\.desktopStyle) private var style
 
     var body: some View {
-        if let skin = style.spec.skin {
-            EraStatusBar(controller: controller, skin: skin)
-        } else {
-            TopBar(controller: controller)
+        WithPerceptionTracking {
+            if let skin = style.spec.skin {
+                EraStatusBar(controller: controller, skin: skin)
+            } else {
+                TopBar(controller: controller)
+            }
         }
     }
 }
@@ -49,10 +56,12 @@ struct StyleDock: View {
     @Environment(\.desktopStyle) private var style
 
     var body: some View {
-        if let skin = style.spec.skin {
-            EraDock(controller: controller, skin: skin)
-        } else {
-            Dock(controller: controller, axis: axis)
+        WithPerceptionTracking {
+            if let skin = style.spec.skin {
+                EraDock(controller: controller, skin: skin)
+            } else {
+                Dock(controller: controller, axis: axis)
+            }
         }
     }
 }
@@ -63,9 +72,11 @@ struct EraMark: View {
     var color: Color = .white
 
     var body: some View {
-        Image(systemName: "circle.hexagongrid.fill")
-            .font(.system(size: size, weight: .bold))
-            .foregroundStyle(color)
+        WithPerceptionTracking {
+            Image(systemName: "circle.hexagongrid.fill")
+                .font(.system(size: size, weight: .bold))
+                .foregroundStyle(color)
+        }
     }
 }
 
@@ -99,27 +110,29 @@ struct EraTaskbar: View {
     private var labelsButtons: Bool { skin != .aero }
 
     var body: some View {
-        HStack(spacing: skin == .classic ? 3 : 4) {
-            startButton
-            if skin == .luna { Color(rgb: 0x1941A5).opacity(0.6).frame(width: 1).padding(.vertical, 4) }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: skin == .aero ? 2 : 3) {
-                    ForEach(manager.windowsInCurrentWorkspace()) { window in
-                        EraTaskButton(window: window, controller: controller, skin: skin, labelled: labelsButtons)
+        WithPerceptionTracking {
+            HStack(spacing: skin == .classic ? 3 : 4) {
+                startButton
+                if skin == .luna { Color(rgb: 0x1941A5).opacity(0.6).frame(width: 1).padding(.vertical, 4) }
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: skin == .aero ? 2 : 3) {
+                        ForEach(manager.windowsInCurrentWorkspace()) { window in
+                            EraTaskButton(window: window, controller: controller, skin: skin, labelled: labelsButtons)
+                        }
                     }
+                    .padding(.horizontal, 2)
                 }
-                .padding(.horizontal, 2)
+                Spacer(minLength: 0)
+                tray
             }
-            Spacer(minLength: 0)
-            tray
+            .padding(.leading, skin == .luna ? 0 : 4)
+            .frame(height: Self.height(skin))
+            .background(EraTaskbarBackground(skin: skin).ignoresSafeArea(edges: .bottom))
+            .environment(\.desktopTheme, barTheme)
+            .environment(\.colorScheme, skin == .classic ? .light : .dark)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.taskbar")
         }
-        .padding(.leading, skin == .luna ? 0 : 4)
-        .frame(height: Self.height(skin))
-        .background(EraTaskbarBackground(skin: skin).ignoresSafeArea(edges: .bottom))
-        .environment(\.desktopTheme, barTheme)
-        .environment(\.colorScheme, skin == .classic ? .light : .dark)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.taskbar")
     }
 
     // MARK: Start
@@ -172,29 +185,31 @@ struct EraTaskbarBackground: View {
     let skin: EraSkin
 
     var body: some View {
-        switch skin {
-        case .luna:
-            LinearGradient(stops: [
-                .init(color: Color(rgb: 0x3168D5), location: 0), .init(color: Color(rgb: 0x4993E6), location: 0.06),
-                .init(color: Color(rgb: 0x2157D7), location: 0.18), .init(color: Color(rgb: 0x2663E0), location: 0.55),
-                .init(color: Color(rgb: 0x2157D7), location: 0.9), .init(color: Color(rgb: 0x1941A5), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
-        case .aero, .aeroNight:
-            let night = skin == .aeroNight
-            ZStack(alignment: .top) {
-                Rectangle().fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
-                LinearGradient(colors: night ? [Color.black.opacity(0.78), Color(white: 0.08).opacity(0.92)]
-                                             : [Color(rgb: 0x9CC4EC).opacity(0.35), Color(rgb: 0x123458).opacity(0.62)],
-                               startPoint: .top, endPoint: .bottom)
-                LinearGradient(colors: [.white.opacity(night ? 0.12 : 0.22), .clear], startPoint: .top, endPoint: .center)
-                Color.white.opacity(night ? 0.3 : 0.55).frame(height: 1)
-            }
-        default:
-            ZStack(alignment: .top) {
-                EraSkin.classicFace
-                VStack(spacing: 0) {
-                    Color(rgb: 0xDFDFDF).frame(height: 1.5)
-                    Color.white.frame(height: 1.5)
+        WithPerceptionTracking {
+            switch skin {
+            case .luna:
+                LinearGradient(stops: [
+                    .init(color: Color(rgb: 0x3168D5), location: 0), .init(color: Color(rgb: 0x4993E6), location: 0.06),
+                    .init(color: Color(rgb: 0x2157D7), location: 0.18), .init(color: Color(rgb: 0x2663E0), location: 0.55),
+                    .init(color: Color(rgb: 0x2157D7), location: 0.9), .init(color: Color(rgb: 0x1941A5), location: 1),
+                ], startPoint: .top, endPoint: .bottom)
+            case .aero, .aeroNight:
+                let night = skin == .aeroNight
+                ZStack(alignment: .top) {
+                    Rectangle().fill(.ultraThinMaterial).environment(\.colorScheme, .dark)
+                    LinearGradient(colors: night ? [Color.black.opacity(0.78), Color(white: 0.08).opacity(0.92)]
+                                                 : [Color(rgb: 0x9CC4EC).opacity(0.35), Color(rgb: 0x123458).opacity(0.62)],
+                                   startPoint: .top, endPoint: .bottom)
+                    LinearGradient(colors: [.white.opacity(night ? 0.12 : 0.22), .clear], startPoint: .top, endPoint: .center)
+                    Color.white.opacity(night ? 0.3 : 0.55).frame(height: 1)
+                }
+            default:
+                ZStack(alignment: .top) {
+                    EraSkin.classicFace
+                    VStack(spacing: 0) {
+                        Color(rgb: 0xDFDFDF).frame(height: 1.5)
+                        Color.white.frame(height: 1.5)
+                    }
                 }
             }
         }
@@ -208,39 +223,41 @@ struct EraStartFace: View {
     var height: CGFloat
 
     var body: some View {
-        switch skin {
-        case .luna:
-            HStack(spacing: 6) {
-                EraMark(size: 17).shadow(color: .black.opacity(0.4), radius: 1, x: 1, y: 1)
-                Text("start")
-                    .font(.custom("TrebuchetMS-BoldItalic", size: 19))
-                    .foregroundStyle(.white)
-                    .shadow(color: .black.opacity(0.55), radius: 0, x: 1, y: 1)
+        WithPerceptionTracking {
+            switch skin {
+            case .luna:
+                HStack(spacing: 6) {
+                    EraMark(size: 17).shadow(color: .black.opacity(0.4), radius: 1, x: 1, y: 1)
+                    Text("start")
+                        .font(.custom("TrebuchetMS-BoldItalic", size: 19))
+                        .foregroundStyle(.white)
+                        .shadow(color: .black.opacity(0.55), radius: 0, x: 1, y: 1)
+                }
+                .padding(.leading, 12)
+                .padding(.trailing, 22)
+                .frame(height: height)
+                .background(
+                    UnevenRoundedRectangle(cornerRadii: .init(topLeading: 0, bottomLeading: 0, bottomTrailing: 14, topTrailing: 14))
+                        .fill(LinearGradient(stops: [
+                            .init(color: Color(rgb: isOpen ? 0x2F7A2F : 0x5EB45A), location: 0),
+                            .init(color: Color(rgb: isOpen ? 0x2A6E2A : 0x3E9B3E), location: 0.15),
+                            .init(color: Color(rgb: isOpen ? 0x266426 : 0x328E32), location: 0.6),
+                            .init(color: Color(rgb: 0x2B7A2B), location: 1),
+                        ], startPoint: .top, endPoint: .bottom))
+                        .shadow(color: .black.opacity(0.45), radius: 2, x: 2))
+            case .aero, .aeroNight:
+                EraOrb(size: skin == .aero ? 36 : 40, isPressed: isOpen)
+                    .frame(width: 54, height: height)
+                    .offset(y: skin == .aeroNight ? -2 : 0)
+            default:
+                HStack(spacing: 4) {
+                    EraMark(size: 13, color: Color(rgb: 0x000080))
+                    Text("Start").font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
+                }
+                .padding(.horizontal, 6)
+                .frame(height: height - 8)
+                .modifier(ClassicBox(sunken: isOpen))
             }
-            .padding(.leading, 12)
-            .padding(.trailing, 22)
-            .frame(height: height)
-            .background(
-                UnevenRoundedRectangle(cornerRadii: .init(topLeading: 0, bottomLeading: 0, bottomTrailing: 14, topTrailing: 14))
-                    .fill(LinearGradient(stops: [
-                        .init(color: Color(rgb: isOpen ? 0x2F7A2F : 0x5EB45A), location: 0),
-                        .init(color: Color(rgb: isOpen ? 0x2A6E2A : 0x3E9B3E), location: 0.15),
-                        .init(color: Color(rgb: isOpen ? 0x266426 : 0x328E32), location: 0.6),
-                        .init(color: Color(rgb: 0x2B7A2B), location: 1),
-                    ], startPoint: .top, endPoint: .bottom))
-                    .shadow(color: .black.opacity(0.45), radius: 2, x: 2))
-        case .aero, .aeroNight:
-            EraOrb(size: skin == .aero ? 36 : 40, isPressed: isOpen)
-                .frame(width: 54, height: height)
-                .offset(y: skin == .aeroNight ? -2 : 0)
-        default:
-            HStack(spacing: 4) {
-                EraMark(size: 13, color: Color(rgb: 0x000080))
-                Text("Start").font(.system(size: 13, weight: .bold)).foregroundStyle(.black)
-            }
-            .padding(.horizontal, 6)
-            .frame(height: height - 8)
-            .modifier(ClassicBox(sunken: isOpen))
         }
     }
 }
@@ -252,19 +269,21 @@ struct EraOrb: View {
     @State private var isHovered = false
 
     var body: some View {
-        ZStack {
-            Circle().fill(RadialGradient(colors: [Color(rgb: 0x9AD8FF), Color(rgb: 0x2A7CD0), Color(rgb: 0x0B2F66)],
-                                         center: UnitPoint(x: 0.5, y: 0.7), startRadius: 0, endRadius: size * 0.6))
-            Circle().strokeBorder(Color.black.opacity(0.55), lineWidth: 1)
-            Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1).padding(1)
-            Ellipse().fill(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom))
-                .frame(width: size * 0.78, height: size * 0.46)
-                .offset(y: -size * 0.2)
-            EraMark(size: size * 0.38).shadow(color: Color(rgb: 0x0B2F66), radius: 1)
+        WithPerceptionTracking {
+            ZStack {
+                Circle().fill(RadialGradient(colors: [Color(rgb: 0x9AD8FF), Color(rgb: 0x2A7CD0), Color(rgb: 0x0B2F66)],
+                                             center: UnitPoint(x: 0.5, y: 0.7), startRadius: 0, endRadius: size * 0.6))
+                Circle().strokeBorder(Color.black.opacity(0.55), lineWidth: 1)
+                Circle().strokeBorder(Color.white.opacity(0.35), lineWidth: 1).padding(1)
+                Ellipse().fill(LinearGradient(colors: [.white.opacity(0.75), .white.opacity(0.05)], startPoint: .top, endPoint: .bottom))
+                    .frame(width: size * 0.78, height: size * 0.46)
+                    .offset(y: -size * 0.2)
+                EraMark(size: size * 0.38).shadow(color: Color(rgb: 0x0B2F66), radius: 1)
+            }
+            .frame(width: size, height: size)
+            .shadow(color: Color(rgb: 0x6FD0FF).opacity(isHovered || isPressed ? 0.9 : 0.25), radius: isHovered ? 8 : 4)
+            .onHover { isHovered = $0 }
         }
-        .frame(width: size, height: size)
-        .shadow(color: Color(rgb: 0x6FD0FF).opacity(isHovered || isPressed ? 0.9 : 0.25), radius: isHovered ? 8 : 4)
-        .onHover { isHovered = $0 }
     }
 }
 
@@ -278,37 +297,39 @@ private struct EraTaskButton: View {
     private var isFocused: Bool { manager.focusedWindowID == window.id && !window.isMinimized }
 
     var body: some View {
-        Button { manager.activateFromTaskbar(window.id) } label: {
-            HStack(spacing: 6) {
-                AppIcon(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
-                        symbol: window.symbol, size: labelled ? 18 : 28)
-                if labelled {
-                    Text(window.title)
-                        .font(skin == .classic ? .system(size: 12, weight: isFocused ? .bold : .regular)
-                                               : .system(size: 12, weight: .regular))
-                        .foregroundStyle(skin == .classic ? Color.black : Color.white)
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
+        WithPerceptionTracking {
+            Button { manager.activateFromTaskbar(window.id) } label: {
+                HStack(spacing: 6) {
+                    AppIcon(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
+                            symbol: window.symbol, size: labelled ? 18 : 28)
+                    if labelled {
+                        Text(window.title)
+                            .font(skin == .classic ? .system(size: 12, weight: isFocused ? .bold : .regular)
+                                                   : .system(size: 12, weight: .regular))
+                            .foregroundStyle(skin == .classic ? Color.black : Color.white)
+                            .lineLimit(1)
+                        Spacer(minLength: 0)
+                    }
                 }
+                .padding(.horizontal, labelled ? 8 : 0)
+                .frame(width: labelled ? 168 : 56, height: EraTaskbar.height(skin) - (skin == .classic ? 8 : 6))
+                .background(face)
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, labelled ? 8 : 0)
-            .frame(width: labelled ? 168 : 56, height: EraTaskbar.height(skin) - (skin == .classic ? 8 : 6))
-            .background(face)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .contextMenu {
+                WindowMenu(window: window, controller: controller).swiftUIItems
+                Divider()
+                AppContextMenu(appID: window.appID, controller: controller)
+            }
+            .windowPreview(for: { [window] }, controller: controller, arrowEdge: .bottom)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                manager.taskbarTargets[window.id] = frame
+            }
+            .accessibilityLabel(window.title)
+            .accessibilityValue(window.isMinimized ? "Minimized" : isFocused ? "Active" : "")
+            .accessibilityIdentifier("desktop.taskbar.item")
         }
-        .buttonStyle(.plain)
-        .contextMenu {
-            WindowMenu(window: window, controller: controller).swiftUIItems
-            Divider()
-            AppContextMenu(appID: window.appID, controller: controller)
-        }
-        .windowPreview(for: { [window] }, controller: controller, arrowEdge: .bottom)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            manager.taskbarTargets[window.id] = frame
-        }
-        .accessibilityLabel(window.title)
-        .accessibilityValue(window.isMinimized ? "Minimized" : isFocused ? "Active" : "")
-        .accessibilityIdentifier("desktop.taskbar.item")
     }
 
     @ViewBuilder
@@ -339,18 +360,20 @@ struct EraClock: View {
     let skin: EraSkin
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            VStack(spacing: 0) {
-                Text(context.date.formatted(date: .omitted, time: .shortened))
-                if skin == .aero {
-                    Text(context.date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year()))
+        WithPerceptionTracking {
+            TimelineView(.everyMinute) { context in
+                VStack(spacing: 0) {
+                    Text(context.date.formatted(date: .omitted, time: .shortened))
+                    if skin == .aero {
+                        Text(context.date.formatted(.dateTime.day(.twoDigits).month(.twoDigits).year()))
+                    }
                 }
+                .font(skin == .dotMatrix ? EraFonts.dot(size: 21) : .system(size: skin == .aero ? 11 : 12).monospacedDigit())
+                .fontDesignCompat(skin == .dotMatrix ? nil : .default)
+                .padding(.horizontal, 6)
+                .accessibilityLabel(context.date.formatted(date: .complete, time: .shortened))
+                .accessibilityIdentifier("desktop.panel.clock")
             }
-            .font(skin == .dotMatrix ? EraFonts.dot(size: 21) : .system(size: skin == .aero ? 11 : 12).monospacedDigit())
-            .fontDesign(skin == .dotMatrix ? nil : .default)
-            .padding(.horizontal, 6)
-            .accessibilityLabel(context.date.formatted(date: .complete, time: .shortened))
-            .accessibilityIdentifier("desktop.panel.clock")
         }
     }
 }
@@ -375,41 +398,43 @@ struct EraMenuBar: View {
     private var manager: WindowManager { controller.windowManager }
 
     var body: some View {
-        HStack(spacing: 16) {
-            systemMenu
-            Text(focusedAppName)
-                .font(.system(size: 13, weight: .bold))
-                .lineLimit(1)
-            if let window = manager.focusedWindow {
-                Menu("Window") { WindowMenu(window: window, controller: controller).swiftUIItems }
-                    .menuStyle(.button).buttonStyle(.plain)
-            }
-            Menu("Go") {
-                ForEach(0..<manager.workspaceCount, id: \.self) { index in
-                    Button(manager.title(ofWorkspace: index)) {
-                        withAnimation(DesktopMotion.standard) { manager.switchToWorkspace(index) }
-                    }
+        WithPerceptionTracking {
+            HStack(spacing: 16) {
+                systemMenu
+                Text(focusedAppName)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                if let window = manager.focusedWindow {
+                    Menu("Window") { WindowMenu(window: window, controller: controller).swiftUIItems }
+                        .menuStyle(.button).buttonStyle(.plain)
                 }
-                Divider()
-                Button("New Workspace", systemImage: "plus") { addAndSwitch(manager) }
-                    .disabled(manager.workspaceCount >= WindowManager.maximumWorkspaces)
+                Menu("Go") {
+                    ForEach(0..<manager.workspaceCount, id: \.self) { index in
+                        Button(manager.title(ofWorkspace: index)) {
+                            withAnimation(DesktopMotion.standard) { manager.switchToWorkspace(index) }
+                        }
+                    }
+                    Divider()
+                    Button("New Workspace", systemImage: "plus") { addAndSwitch(manager) }
+                        .disabled(manager.workspaceCount >= WindowManager.maximumWorkspaces)
+                }
+                .menuStyle(.button).buttonStyle(.plain)
+                Spacer(minLength: 12)
+                OverviewButton(isActive: controller.isOverviewPresented) { controller.toggleOverview() }
+                    .accessibilityIdentifier("desktop.panel.overview")
+                WorkspaceSwitcher(manager: manager)
+                SystemTrayButtons(controller: controller)
+                EraClock(skin: skin)
+                if skin == .platinum { applicationMenu }
             }
-            .menuStyle(.button).buttonStyle(.plain)
-            Spacer(minLength: 12)
-            OverviewButton(isActive: controller.isOverviewPresented) { controller.toggleOverview() }
-                .accessibilityIdentifier("desktop.panel.overview")
-            WorkspaceSwitcher(manager: manager)
-            SystemTrayButtons(controller: controller)
-            EraClock(skin: skin)
-            if skin == .platinum { applicationMenu }
+            .font(.system(size: 13, weight: skin == .platinum ? .semibold : .regular))
+            .foregroundStyle(.black)
+            .environment(\.desktopTheme, barTheme)
+            .padding(.horizontal, 12)
+            .frame(height: Self.height)
+            .background(background.ignoresSafeArea(edges: .top))
+            .environment(\.colorScheme, .light)
         }
-        .font(.system(size: 13, weight: skin == .platinum ? .semibold : .regular))
-        .foregroundStyle(.black)
-        .environment(\.desktopTheme, barTheme)
-        .padding(.horizontal, 12)
-        .frame(height: Self.height)
-        .background(background.ignoresSafeArea(edges: .top))
-        .environment(\.colorScheme, .light)
     }
 
     @ViewBuilder
@@ -508,38 +533,40 @@ struct EraStatusBar: View {
     private var manager: WindowManager { controller.windowManager }
 
     var body: some View {
-        HStack(spacing: 10) {
-            if skin == .berry {
-                TimelineView(.everyMinute) { context in
-                    HStack(alignment: .firstTextBaseline, spacing: 6) {
-                        Text(context.date.formatted(date: .omitted, time: .shortened))
-                            .font(.system(size: 17, weight: .bold))
-                        Text(context.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(Color.white.opacity(0.65))
+        WithPerceptionTracking {
+            HStack(spacing: 10) {
+                if skin == .berry {
+                    TimelineView(.everyMinute) { context in
+                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            Text(context.date.formatted(date: .omitted, time: .shortened))
+                                .font(.system(size: 17, weight: .bold))
+                            Text(context.date.formatted(.dateTime.weekday(.abbreviated).day().month(.abbreviated)))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(Color.white.opacity(0.65))
+                        }
+                        .accessibilityIdentifier("desktop.panel.clock")
                     }
-                    .accessibilityIdentifier("desktop.panel.clock")
+                } else {
+                    EraClock(skin: skin)
                 }
-            } else {
-                EraClock(skin: skin)
+                if let window = manager.focusedWindow, skin == .berry {
+                    Text(window.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
+                        .foregroundStyle(Color(rgb: 0x6CB4FF))
+                }
+                Spacer(minLength: 8)
+                OverviewButton(isActive: controller.isOverviewPresented) { controller.toggleOverview() }
+                    .accessibilityIdentifier("desktop.panel.overview")
+                WorkspaceSwitcher(manager: manager)
+                SystemTrayButtons(controller: controller)
+                PowerButton(controller: controller, size: 26)
             }
-            if let window = manager.focusedWindow, skin == .berry {
-                Text(window.title).font(.system(size: 12, weight: .semibold)).lineLimit(1)
-                    .foregroundStyle(Color(rgb: 0x6CB4FF))
-            }
-            Spacer(minLength: 8)
-            OverviewButton(isActive: controller.isOverviewPresented) { controller.toggleOverview() }
-                .accessibilityIdentifier("desktop.panel.overview")
-            WorkspaceSwitcher(manager: manager)
-            SystemTrayButtons(controller: controller)
-            PowerButton(controller: controller, size: 26)
+            .foregroundStyle(skin == .berry ? Color.white : theme.primaryText)
+            .environment(\.desktopTheme, barTheme)
+            .padding(.horizontal, 12)
+            .frame(height: Self.height)
+            .background(background.ignoresSafeArea(edges: .top))
+            .environment(\.colorScheme, skin == .berry ? .dark : (theme.windowBackground.isDarkish ? .dark : .light))
         }
-        .foregroundStyle(skin == .berry ? Color.white : theme.primaryText)
-        .environment(\.desktopTheme, barTheme)
-        .padding(.horizontal, 12)
-        .frame(height: Self.height)
-        .background(background.ignoresSafeArea(edges: .top))
-        .environment(\.colorScheme, skin == .berry ? .dark : (theme.windowBackground.isDarkish ? .dark : .light))
     }
 
     @ViewBuilder
@@ -596,52 +623,54 @@ struct EraDock: View {
     }
 
     var body: some View {
-        let row = HStack(alignment: .bottom, spacing: skin == .berry ? 14 : 10) {
-            appsButton
-            ForEach(items) { app in
-                EraDockItem(app: app, controller: controller, skin: skin, size: iconSize)
+        WithPerceptionTracking {
+            let row = HStack(alignment: .bottom, spacing: skin == .berry ? 14 : 10) {
+                appsButton
+                ForEach(items) { app in
+                    EraDockItem(app: app, controller: controller, skin: skin, size: iconSize)
+                }
             }
-        }
-        Group {
-            switch skin {
-            case .berry:
-                row.padding(.horizontal, 18)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .frame(height: 70)
-                    .background {
-                        ZStack(alignment: .top) {
-                            LinearGradient(colors: [Color(rgb: 0x1C1F24), Color(rgb: 0x060708)], startPoint: .top, endPoint: .bottom)
-                            LinearGradient(colors: [Color(rgb: 0x7D848E), Color(rgb: 0xE6EAEE), Color(rgb: 0x7D848E)],
-                                           startPoint: .leading, endPoint: .trailing).frame(height: 1.5)
+            Group {
+                switch skin {
+                case .berry:
+                    row.padding(.horizontal, 18)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .frame(height: 70)
+                        .background {
+                            ZStack(alignment: .top) {
+                                LinearGradient(colors: [Color(rgb: 0x1C1F24), Color(rgb: 0x060708)], startPoint: .top, endPoint: .bottom)
+                                LinearGradient(colors: [Color(rgb: 0x7D848E), Color(rgb: 0xE6EAEE), Color(rgb: 0x7D848E)],
+                                               startPoint: .leading, endPoint: .trailing).frame(height: 1.5)
+                            }
+                            .ignoresSafeArea(edges: .bottom)
                         }
-                        .ignoresSafeArea(edges: .bottom)
-                    }
-            case .dotMatrix:
-                row.padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(Capsule().fill(theme.panelBackground))
-                    .overlay(Capsule().strokeBorder(theme.primaryText.opacity(0.14), lineWidth: 1))
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 76)
-                    .padding(.bottom, 6)
-            default:
-                row.padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
-                    .background {
-                        UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0, bottomTrailing: 0, topTrailing: 12))
-                            .fill(Color.white.opacity(0.32))
-                            .background(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0,
-                                                                                  bottomTrailing: 0, topTrailing: 12))
-                                .fill(.ultraThinMaterial))
-                            .overlay(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0,
-                                                                               bottomTrailing: 0, topTrailing: 12))
-                                .strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 72, alignment: .bottom)
+                case .dotMatrix:
+                    row.padding(.horizontal, 16).padding(.vertical, 10)
+                        .background(Capsule().fill(theme.panelBackground))
+                        .overlay(Capsule().strokeBorder(theme.primaryText.opacity(0.14), lineWidth: 1))
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 76)
+                        .padding(.bottom, 6)
+                default:
+                    row.padding(.horizontal, 12).padding(.top, 6).padding(.bottom, 10)
+                        .background {
+                            UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0, bottomTrailing: 0, topTrailing: 12))
+                                .fill(Color.white.opacity(0.32))
+                                .background(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0,
+                                                                                      bottomTrailing: 0, topTrailing: 12))
+                                    .fill(.ultraThinMaterial))
+                                .overlay(UnevenRoundedRectangle(cornerRadii: .init(topLeading: 12, bottomLeading: 0,
+                                                                                   bottomTrailing: 0, topTrailing: 12))
+                                    .strokeBorder(Color.white.opacity(0.7), lineWidth: 1))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 72, alignment: .bottom)
+                }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel("Dock")
+            .accessibilityIdentifier("desktop.dock")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Dock")
-        .accessibilityIdentifier("desktop.dock")
     }
 
     private var appsButton: some View {
@@ -687,36 +716,38 @@ private struct EraDockItem: View {
     private var isFocused: Bool { windows.contains { $0.id == manager.focusedWindowID && !$0.isMinimized } }
 
     var body: some View {
-        let isRunning = !windows.isEmpty
-        Button(action: activate) {
-            AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id),
-                    symbol: app.symbol, size: size)
-                .grayscale(skin == .dotMatrix ? 1 : 0)
-                .padding(skin == .berry ? 5 : 0)
-                .background {
-                    // The trackball era's focus: a blue glow behind the selected app.
-                    if skin == .berry && isFocused {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(LinearGradient(colors: [Color(rgb: 0x5FB0FF), Color(rgb: 0x0B5FD0)], startPoint: .top, endPoint: .bottom))
-                            .shadow(color: Color(rgb: 0x1E8BFF), radius: 8)
+        WithPerceptionTracking {
+            let isRunning = !windows.isEmpty
+            Button(action: activate) {
+                AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id),
+                        symbol: app.symbol, size: size)
+                    .grayscale(skin == .dotMatrix ? 1 : 0)
+                    .padding(skin == .berry ? 5 : 0)
+                    .background {
+                        // The trackball era's focus: a blue glow behind the selected app.
+                        if skin == .berry && isFocused {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(LinearGradient(colors: [Color(rgb: 0x5FB0FF), Color(rgb: 0x0B5FD0)], startPoint: .top, endPoint: .bottom))
+                                .shadow(color: Color(rgb: 0x1E8BFF), radius: 8)
+                        }
                     }
-                }
-                .overlay(alignment: .bottom) {
-                    if isRunning { indicator.offset(y: skin == .aqua ? 9 : 7) }
-                }
-                .contentShape(Rectangle())
+                    .overlay(alignment: .bottom) {
+                        if isRunning { indicator.offset(y: skin == .aqua ? 9 : 7) }
+                    }
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.lift)
+            .contextMenu { AppContextMenu(appID: app.id, controller: controller) }
+            .windowPreview(for: { windows }, controller: controller, arrowEdge: .bottom)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                for window in windows { manager.taskbarTargets[window.id] = frame }
+            }
+            .help(app.name)
+            .accessibilityLabel(app.name)
+            .accessibilityValue(isRunning ? "Running" : "")
+            .accessibilityIdentifier(isRunning ? "desktop.taskbar.item" : "desktop.dock.item")
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.lift)
-        .contextMenu { AppContextMenu(appID: app.id, controller: controller) }
-        .windowPreview(for: { windows }, controller: controller, arrowEdge: .bottom)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            for window in windows { manager.taskbarTargets[window.id] = frame }
-        }
-        .help(app.name)
-        .accessibilityLabel(app.name)
-        .accessibilityValue(isRunning ? "Running" : "")
-        .accessibilityIdentifier(isRunning ? "desktop.taskbar.item" : "desktop.dock.item")
     }
 
     @ViewBuilder

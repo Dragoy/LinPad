@@ -340,7 +340,11 @@ final class LinuxSurfaceView: UIView {
     var smartQuotesType: UITextSmartQuotesType = .no
     var smartDashesType: UITextSmartDashesType = .no
     var smartInsertDeleteType: UITextSmartInsertDeleteType = .no
-    var inlinePredictionType: UITextInlinePredictionType = .no
+    @available(iOS 17.0, *)
+    var inlinePredictionType: UITextInlinePredictionType {
+        get { .no }
+        set {}
+    }
 }
 
 /// A desktop window's content for a Linux toplevel.

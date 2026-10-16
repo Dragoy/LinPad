@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -16,7 +17,7 @@ enum TextEditorApp {
 // MARK: - Document
 
 @MainActor
-@Observable
+@Perceptible
 final class EditorDocument: LifecycleSaving {
     static let readOnlyByteLimit = 2 * 1024 * 1024
     /// Beyond this many UTF-16 units a full regex pass costs noticeable main-thread time.
@@ -24,19 +25,19 @@ final class EditorDocument: LifecycleSaving {
     /// Autosave and the recovery snapshot run this long after the last change.
     static let autosaveDelay: Duration = .milliseconds(1500)
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let window: any WindowHandle
-    @ObservationIgnored let editorView: EditorContainerView
-    @ObservationIgnored private var didLoad = false
-    @ObservationIgnored private let recovery: EditorRecoveryStore
-    @ObservationIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let window: any WindowHandle
+    @PerceptionIgnored let editorView: EditorContainerView
+    @PerceptionIgnored private var didLoad = false
+    @PerceptionIgnored private let recovery: EditorRecoveryStore
+    @PerceptionIgnored private let defaults: UserDefaults
     /// Names this window's recovery record; kept in the window's arguments so a restored
     /// window finds it again.
-    @ObservationIgnored private(set) var recoveryID: String
-    @ObservationIgnored private var recoveryIDPublished: Bool
-    @ObservationIgnored private var autosaveTask: Task<Void, Never>?
+    @PerceptionIgnored private(set) var recoveryID: String
+    @PerceptionIgnored private var recoveryIDPublished: Bool
+    @PerceptionIgnored private var autosaveTask: Task<Void, Never>?
     /// The change count the recovery record (or the file) last captured.
-    @ObservationIgnored private var persistedChangeCount = -1
+    @PerceptionIgnored private var persistedChangeCount = -1
 
     let homeDirectory: String
     private(set) var path: String?
@@ -290,48 +291,52 @@ struct TextEditorAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            if let reason = document.readOnlyReason {
-                InlineBanner(kind: .warning, message: reason)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                if let reason = document.readOnlyReason {
+                    InlineBanner(kind: .warning, message: reason)
+                }
+                if let message = document.errorMessage {
+                    InlineBanner(kind: .error, message: message, onDismiss: { document.errorMessage = nil })
+                }
+                if document.isFindVisible {
+                    findBar
+                }
+                ZStack {
+                    EditorRepresentable(editorView: document.editorView, style: EditorStyle(theme: theme))
+                    if document.isLoading {
+                        ProgressView()
+                            .controlSize(.large)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                            .background(theme.windowBackground.opacity(0.6))
+                    }
+                }
+                statusBar
             }
-            if let message = document.errorMessage {
-                InlineBanner(kind: .error, message: message, onDismiss: { document.errorMessage = nil })
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .animation(.easeOut(duration: 0.18), value: document.isFindVisible)
+            .task { await document.loadIfNeeded() }
+            .nativeDropTarget(window: windowID) { [editorView = document.editorView] items, _ in
+                editorView.receiveDrop(items)
             }
-            if document.isFindVisible {
-                findBar
-            }
-            ZStack {
-                EditorRepresentable(editorView: document.editorView, style: EditorStyle(theme: theme))
-                if document.isLoading {
-                    ProgressView()
-                        .controlSize(.large)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(theme.windowBackground.opacity(0.6))
+            .onChangeCompat(of: document.isFindVisible) { _, visible in
+                if visible {
+                    findFieldFocused = true
+                } else {
+                    document.editorView.clearFindHighlight()
+                    document.editorView.focus()
                 }
             }
-            statusBar
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .animation(.easeOut(duration: 0.18), value: document.isFindVisible)
-        .task { await document.loadIfNeeded() }
-        .nativeDropTarget(window: windowID) { [editorView = document.editorView] items, _ in
-            editorView.receiveDrop(items)
-        }
-        .onChange(of: document.isFindVisible) { _, visible in
-            if visible {
-                findFieldFocused = true
-            } else {
-                document.editorView.clearFindHighlight()
-                document.editorView.focus()
+            .sheet(isPresented: document.binding(\.isSaveAsPresented)) {
+                WithPerceptionTracking {
+                    SaveAsSheet(initialPath: document.suggestedSavePath) { target in
+                        document.saveAs(target)
+                    }
+                    .environment(\.desktopTheme, theme)
+                }
             }
-        }
-        .sheet(isPresented: $document.isSaveAsPresented) {
-            SaveAsSheet(initialPath: document.suggestedSavePath) { target in
-                document.saveAs(target)
-            }
-            .environment(\.desktopTheme, theme)
         }
     }
 
@@ -387,7 +392,7 @@ struct TextEditorAppView: View {
         .padding(.vertical, 5)
         .background(theme.titleBarInactive.opacity(0.7))
         .overlay(alignment: .bottom) { ThemedSeparator() }
-        .onChange(of: findQuery) { _, query in
+        .onChangeCompat(of: findQuery) { _, query in
             findMatchCount = query.isEmpty ? nil : document.editorView.matchCount(of: query)
             if !query.isEmpty { document.editorView.find(query, backwards: false, fromSelectionStart: true) }
         }
@@ -427,39 +432,41 @@ private struct SaveAsSheet: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Save As")
-                .font(.title3.weight(.semibold))
-            VStack(alignment: .leading, spacing: 6) {
-                Text("Path in the Linux file system")
-                    .font(.caption)
-                    .foregroundStyle(theme.secondaryText)
-                TextField("/root/project/file.txt", text: $path)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14, design: .monospaced))
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .focused($focused)
-                    .onSubmit(commit)
-                    .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(theme.windowBackground))
-                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.separator, lineWidth: 1))
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Save As")
+                    .font(.title3.weight(.semibold))
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Path in the Linux file system")
+                        .font(.caption)
+                        .foregroundStyle(theme.secondaryText)
+                    TextField("/root/project/file.txt", text: $path)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14, design: .monospaced))
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .focused($focused)
+                        .onSubmit(commit)
+                        .padding(8)
+                        .background(RoundedRectangle(cornerRadius: 8).fill(theme.windowBackground))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(theme.separator, lineWidth: 1))
+                }
+                HStack {
+                    Spacer()
+                    ToolbarTextButton(title: "Cancel") { dismiss() }
+                        .keyboardShortcut(.cancelAction)
+                    ToolbarTextButton(title: "Save", prominent: true, action: commit)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(path.trimmedWhitespace.isEmpty)
+                }
             }
-            HStack {
-                Spacer()
-                ToolbarTextButton(title: "Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                ToolbarTextButton(title: "Save", prominent: true, action: commit)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(path.trimmedWhitespace.isEmpty)
-            }
+            .padding(20)
+            .frame(minWidth: 420)
+            .background(theme.titleBarActive)
+            .foregroundStyle(theme.primaryText)
+            .presentationDetents([.height(200)])
+            .onAppear { focused = true }
         }
-        .padding(20)
-        .frame(minWidth: 420)
-        .background(theme.titleBarActive)
-        .foregroundStyle(theme.primaryText)
-        .presentationDetents([.height(200)])
-        .onAppear { focused = true }
     }
 
     private func commit() {
@@ -864,7 +871,9 @@ final class EditorContainerView: UIView, UITextViewDelegate, NSTextStorageDelega
         textView.smartQuotesType = .no
         textView.smartDashesType = .no
         textView.smartInsertDeleteType = .no
-        textView.inlinePredictionType = .no
+        if #available(iOS 17, *) {
+            textView.inlinePredictionType = .no
+        }
         textView.dataDetectorTypes = []
         textView.alwaysBounceVertical = true
         textView.keyboardDismissMode = .interactive

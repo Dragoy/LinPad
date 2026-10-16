@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// How Firefox renders while windowed, as the normal-scale column of ishwl's
 /// /etc/ishwl/app-scale ("firefox-esr 2 1"). Scale 1 draws a quarter of the pixels:
@@ -73,33 +74,35 @@ struct PerformanceSettingsSection: View {
     @State private var message: String?
 
     var body: some View {
-        SettingsSection(title: "Performance", symbol: "speedometer") {
-            SettingsRow(title: "Firefox rendering") {
-                Picker("Firefox rendering", selection: $mode) {
-                    ForEach(FirefoxRendering.allCases) { Text($0.title).tag($0) }
+        WithPerceptionTracking {
+            SettingsSection(title: "Performance", symbol: "speedometer") {
+                SettingsRow(title: "Firefox rendering") {
+                    Picker("Firefox rendering", selection: $mode) {
+                        ForEach(FirefoxRendering.allCases) { Text($0.title).tag($0) }
+                    }
+                    .labelsHidden()
+                    .disabled(!loaded)
+                    .accessibilityIdentifier("settings.firefoxRendering")
                 }
-                .labelsHidden()
-                .disabled(!loaded)
-                .accessibilityIdentifier("settings.firefoxRendering")
+                Text(message ?? "Sharp Text renders Firefox at full resolution. Smooth Video renders it at half, so videos in a page drop far fewer frames and use less CPU, but text looks softer. Fullscreen video always uses the faster setting.")
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings.firefoxRendering.note")
             }
-            Text(message ?? "Sharp Text renders Firefox at full resolution. Smooth Video renders it at half, so videos in a page drop far fewer frames and use less CPU, but text looks softer. Fullscreen video always uses the faster setting.")
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("settings.firefoxRendering.note")
-        }
-        .task {
-            mode = await FirefoxRendering.load(from: host)
-            loaded = true
-        }
-        .onChange(of: mode) { _, newMode in
-            guard loaded else { return }
-            Task {
-                do {
-                    try await newMode.apply(to: host)
-                    message = "Saved. Close and reopen Firefox to switch to \(newMode.title)."
-                } catch {
-                    message = "Could not save the setting: \(error.localizedDescription)"
+            .task {
+                mode = await FirefoxRendering.load(from: host)
+                loaded = true
+            }
+            .onChangeCompat(of: mode) { _, newMode in
+                guard loaded else { return }
+                Task {
+                    do {
+                        try await newMode.apply(to: host)
+                        message = "Saved. Close and reopen Firefox to switch to \(newMode.title)."
+                    } catch {
+                        message = "Could not save the setting: \(error.localizedDescription)"
+                    }
                 }
             }
         }

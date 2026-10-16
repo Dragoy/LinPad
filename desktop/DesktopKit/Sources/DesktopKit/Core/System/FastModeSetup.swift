@@ -1,3 +1,4 @@
+import Perception
 import Darwin
 import SwiftUI
 import UIKit
@@ -109,7 +110,7 @@ struct FastModeCheck: Identifiable, Equatable {
 /// Settings › Fast Mode › Set Up: the checklist, the buttons that fix each item, and a
 /// test that runs the handoff and times the JIT.
 struct FastModeSetupSheet: View {
-    @Bindable var fastMode: FastModeModel
+    @Perception.Bindable var fastMode: FastModeModel
     @Environment(\.desktopController) private var controller
     @Environment(\.dismiss) private var dismiss
     @Environment(\.scenePhase) private var scenePhase
@@ -127,34 +128,36 @@ struct FastModeSetupSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    Text("Fast mode runs Linux programs as native ARM64 code, about 5x faster. iPadOS allows that only while a debugger is attached, so LinPad asks StikDebug to attach at launch. Work down the list; each step has a button.")
-                        .fixedSize(horizontal: false, vertical: true)
-                    ForEach(checks) { check in row(check) }
-                    Divider()
-                    testSection
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 14) {
+                        Text("Fast mode runs Linux programs as native ARM64 code, about 5x faster. iPadOS allows that only while a debugger is attached, so LinPad asks StikDebug to attach at launch. Work down the list; each step has a button.")
+                            .fixedSize(horizontal: false, vertical: true)
+                        ForEach(checks) { check in row(check) }
+                        Divider()
+                        testSection
+                    }
+                    .padding(24)
                 }
-                .padding(24)
+                .navigationTitle("Set Up Fast Mode")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Recheck", systemImage: "arrow.clockwise") { refresh() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
             }
-            .navigationTitle("Set Up Fast Mode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Recheck", systemImage: "arrow.clockwise") { refresh() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
+            .frame(minWidth: 520, minHeight: 600)
+            .onAppear(perform: refresh)
+            // Back from StikDebug, LocalDevVPN or the App Store.
+            .onChangeCompat(of: scenePhase) { _, phase in if phase == .active { refresh() } }
+            .onChangeCompat(of: fastMode.status) { _, _ in refresh() }
+            .accessibilityIdentifier("desktop.fastModeSetup")
         }
-        .frame(minWidth: 520, minHeight: 600)
-        .onAppear(perform: refresh)
-        // Back from StikDebug, LocalDevVPN or the App Store.
-        .onChange(of: scenePhase) { _, phase in if phase == .active { refresh() } }
-        .onChange(of: fastMode.status) { _, _ in refresh() }
-        .accessibilityIdentifier("desktop.fastModeSetup")
     }
 
     private func refresh() {

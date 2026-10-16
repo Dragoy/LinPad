@@ -1,4 +1,5 @@
 import GameController
+import Perception
 import SwiftUI
 import UIKit
 
@@ -103,25 +104,27 @@ struct LinuxKeyboardLayoutSettingsView: View {
     @AppStorage(LinuxOptionKeyRole.storageKey) private var optionRole = LinuxOptionKeyRole.rightAltGr
 
     var body: some View {
-        SettingsRow(title: "Linux keyboard layout") {
-            Picker("Linux keyboard layout", selection: $layout) {
-                Text("Automatic (follows iPad)").tag(LinuxKeyboardLayouts.automatic)
-                ForEach(LinuxKeyboardLayouts.catalog) { Text($0.title).tag($0.id) }
+        WithPerceptionTracking {
+            SettingsRow(title: "Linux keyboard layout") {
+                Picker("Linux keyboard layout", selection: $layout) {
+                    Text("Automatic (follows iPad)").tag(LinuxKeyboardLayouts.automatic)
+                    ForEach(LinuxKeyboardLayouts.catalog) { Text($0.title).tag($0.id) }
+                }
+                .labelsHidden()
+                .accessibilityIdentifier("settings.linuxKeyboardLayout")
             }
-            .labelsHidden()
-            .accessibilityIdentifier("settings.linuxKeyboardLayout")
-        }
-        SettingsRow(title: "Option key acts as") {
-            Picker("Option key acts as", selection: $optionRole) {
-                ForEach(LinuxOptionKeyRole.allCases) { Text($0.title).tag($0) }
+            SettingsRow(title: "Option key acts as") {
+                Picker("Option key acts as", selection: $optionRole) {
+                    ForEach(LinuxOptionKeyRole.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .accessibilityIdentifier("settings.linuxOptionKeyRole")
             }
-            .labelsHidden()
-            .accessibilityIdentifier("settings.linuxOptionKeyRole")
+            Text(explanation)
+                .font(.caption)
+                .foregroundStyle(theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        Text(explanation)
-            .font(.caption)
-            .foregroundStyle(theme.secondaryText)
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private var explanation: String {

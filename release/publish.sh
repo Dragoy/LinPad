@@ -33,7 +33,7 @@ REPO=fspecii/LinPad
 RAW=https://raw.githubusercontent.com/$REPO/main
 BUNDLE_ID=com.valentinneagu.ish.arm64
 APP_GROUP=group.$BUNDLE_ID
-MIN_OS=17.0
+MIN_OS=16.0
 export PATH=/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:$PATH
 
 usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-2}"; }
@@ -146,7 +146,7 @@ ENT=$OUT_DIR/entitlements
 if [ -z "$IPA" ]; then
     BUILD_NUMBER=$(git rev-list --count HEAD)
     note "building $VERSION ($BUILD_NUMBER): Release, native JIT, virtgpu"
-    run xcodebuild -project iSH.xcodeproj -target iSH-ARM64 -configuration Release -sdk iphoneos \
+    run xcodebuild -skipMacroValidation -project iSH.xcodeproj -target iSH-ARM64 -configuration Release -sdk iphoneos \
         SYMROOT="$BUILD_DIR" IPHONEOS_DEPLOYMENT_TARGET=$MIN_OS ISH_JIT_BUILD=enabled ISH_VIRTGPU=enabled \
         MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
         CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY= DEVELOPMENT_TEAM= build

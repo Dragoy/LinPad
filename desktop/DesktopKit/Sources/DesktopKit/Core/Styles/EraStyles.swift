@@ -1,4 +1,5 @@
 import CoreText
+import Perception
 import SwiftUI
 
 /// The chrome of the desktop themes' styles (Luna, Aero, Classic 98, Platinum, Aqua, Berry,
@@ -226,14 +227,16 @@ struct EraTitleBarBackground: View {
     private var brushedMetal: Bool { brushedMetalSetting || brushedMetalPreview }
 
     var body: some View {
-        switch skin {
-        case .luna: luna
-        case .aero, .aeroNight: glass
-        case .classic: classic
-        case .platinum: platinum
-        case .aqua: brushedMetal ? AnyView(BrushedMetal(isFocused: isFocused)) : AnyView(pinstripes)
-        case .berry: berry
-        case .dotMatrix: isFocused ? theme.titleBarActive : theme.titleBarInactive
+        WithPerceptionTracking {
+            switch skin {
+            case .luna: luna
+            case .aero, .aeroNight: glass
+            case .classic: classic
+            case .platinum: platinum
+            case .aqua: brushedMetal ? AnyView(BrushedMetal(isFocused: isFocused)) : AnyView(pinstripes)
+            case .berry: berry
+            case .dotMatrix: isFocused ? theme.titleBarActive : theme.titleBarInactive
+            }
         }
     }
 
@@ -313,18 +316,20 @@ struct EraTitleBarBackground: View {
 /// The few diagonal light streaks of the glass eras.
 private struct GlassStreaks: View {
     var body: some View {
-        Canvas { context, size in
-            for (offset, width) in [(0.18, 26.0), (0.24, 8.0), (0.62, 34.0), (0.7, 10.0)] {
-                let x = size.width * offset
-                var path = Path()
-                path.move(to: CGPoint(x: x, y: 0))
-                path.addLine(to: CGPoint(x: x + width, y: 0))
-                path.addLine(to: CGPoint(x: x + width - size.height * 0.9, y: size.height))
-                path.addLine(to: CGPoint(x: x - size.height * 0.9, y: size.height))
-                context.fill(path, with: .color(.white.opacity(0.22)))
+        WithPerceptionTracking {
+            Canvas { context, size in
+                for (offset, width) in [(0.18, 26.0), (0.24, 8.0), (0.62, 34.0), (0.7, 10.0)] {
+                    let x = size.width * offset
+                    var path = Path()
+                    path.move(to: CGPoint(x: x, y: 0))
+                    path.addLine(to: CGPoint(x: x + width, y: 0))
+                    path.addLine(to: CGPoint(x: x + width - size.height * 0.9, y: size.height))
+                    path.addLine(to: CGPoint(x: x - size.height * 0.9, y: size.height))
+                    context.fill(path, with: .color(.white.opacity(0.22)))
+                }
             }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 }
 
@@ -333,21 +338,23 @@ struct BrushedMetal: View {
     var isFocused = true
 
     var body: some View {
-        Canvas { context, size in
-            let ramp = Gradient(colors: [Color(rgb: isFocused ? 0xD2D2D2 : 0xDCDCDC), Color(rgb: isFocused ? 0xA9A9A9 : 0xC4C4C4)])
-            context.fill(Path(CGRect(origin: .zero, size: size)),
-                         with: .linearGradient(ramp, startPoint: .zero, endPoint: CGPoint(x: 0, y: max(size.height, 1) * 4)))
-            var seed: UInt64 = 0x9E3779B97F4A7C15
-            func next() -> CGFloat {
-                seed = seed &* 6364136223846793005 &+ 1442695040888963407
-                return CGFloat(seed >> 33) / CGFloat(UInt32.max >> 1)
-            }
-            for _ in 0..<Int(size.height * 3) {
-                let y = next() * size.height
-                let x = next() * size.width
-                let length = 40 + next() * size.width * 0.6
-                context.fill(Path(CGRect(x: x - length / 2, y: y, width: length, height: 0.5)),
-                             with: .color(next() > 0.5 ? .white.opacity(0.35) : .black.opacity(0.08)))
+        WithPerceptionTracking {
+            Canvas { context, size in
+                let ramp = Gradient(colors: [Color(rgb: isFocused ? 0xD2D2D2 : 0xDCDCDC), Color(rgb: isFocused ? 0xA9A9A9 : 0xC4C4C4)])
+                context.fill(Path(CGRect(origin: .zero, size: size)),
+                             with: .linearGradient(ramp, startPoint: .zero, endPoint: CGPoint(x: 0, y: max(size.height, 1) * 4)))
+                var seed: UInt64 = 0x9E3779B97F4A7C15
+                func next() -> CGFloat {
+                    seed = seed &* 6364136223846793005 &+ 1442695040888963407
+                    return CGFloat(seed >> 33) / CGFloat(UInt32.max >> 1)
+                }
+                for _ in 0..<Int(size.height * 3) {
+                    let y = next() * size.height
+                    let x = next() * size.width
+                    let length = 40 + next() * size.width * 0.6
+                    context.fill(Path(CGRect(x: x - length / 2, y: y, width: length, height: 0.5)),
+                                 with: .color(next() > 0.5 ? .white.opacity(0.35) : .black.opacity(0.08)))
+                }
             }
         }
     }
@@ -368,37 +375,39 @@ struct EraWindowFrame<S: InsettableShape>: View {
     let isFocused: Bool
 
     var body: some View {
-        switch skin {
-        case .luna:
-            shape.strokeBorder(isFocused ? Color(rgb: 0x0831D9) : Color(rgb: 0x7B9DE6), lineWidth: 3)
-        case .aero, .aeroNight:
-            let night = skin == .aeroNight
-            ZStack {
-                shape.strokeBorder(LinearGradient(colors: night ? [Color(rgb: 0x9BB3C4), Color(rgb: 0x5E7687)]
-                                                                 : [Color(rgb: 0xC9DCF2), Color(rgb: 0x8FB0D8)],
-                                                  startPoint: .top, endPoint: .bottom)
-                                       .opacity(isFocused ? 0.95 : 0.75), lineWidth: 5)
-                shape.strokeBorder(Color.black.opacity(0.45), lineWidth: 1)
-                shape.inset(by: 4).strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
+        WithPerceptionTracking {
+            switch skin {
+            case .luna:
+                shape.strokeBorder(isFocused ? Color(rgb: 0x0831D9) : Color(rgb: 0x7B9DE6), lineWidth: 3)
+            case .aero, .aeroNight:
+                let night = skin == .aeroNight
+                ZStack {
+                    shape.strokeBorder(LinearGradient(colors: night ? [Color(rgb: 0x9BB3C4), Color(rgb: 0x5E7687)]
+                                                                     : [Color(rgb: 0xC9DCF2), Color(rgb: 0x8FB0D8)],
+                                                      startPoint: .top, endPoint: .bottom)
+                                           .opacity(isFocused ? 0.95 : 0.75), lineWidth: 5)
+                    shape.strokeBorder(Color.black.opacity(0.45), lineWidth: 1)
+                    shape.inset(by: 4).strokeBorder(Color.white.opacity(0.55), lineWidth: 1)
+                }
+            case .classic:
+                ZStack {
+                    Rectangle().strokeBorder(EraSkin.classicFace, lineWidth: 4.5)
+                    ClassicBevel(raised: true, thick: true)
+                }
+            case .platinum:
+                ZStack {
+                    Rectangle().strokeBorder(Color(rgb: 0xDDDDDD), lineWidth: 4)
+                    ClassicBevel(raised: true, thick: false, palette: .platinum).padding(1)
+                    Rectangle().strokeBorder(isFocused ? Color.black : Color(rgb: 0x777777), lineWidth: 1)
+                }
+            case .aqua:
+                shape.strokeBorder(Color.black.opacity(isFocused ? 0.35 : 0.2), lineWidth: 1)
+            case .berry:
+                shape.strokeBorder(LinearGradient(colors: [Color(rgb: 0xE1E5EA), Color(rgb: 0x6C727C), Color(rgb: 0xB8BEC6)],
+                                                  startPoint: .top, endPoint: .bottom), lineWidth: 2)
+            case .dotMatrix:
+                shape.strokeBorder(Color.primary.opacity(isFocused ? 0.25 : 0.12), lineWidth: 1)
             }
-        case .classic:
-            ZStack {
-                Rectangle().strokeBorder(EraSkin.classicFace, lineWidth: 4.5)
-                ClassicBevel(raised: true, thick: true)
-            }
-        case .platinum:
-            ZStack {
-                Rectangle().strokeBorder(Color(rgb: 0xDDDDDD), lineWidth: 4)
-                ClassicBevel(raised: true, thick: false, palette: .platinum).padding(1)
-                Rectangle().strokeBorder(isFocused ? Color.black : Color(rgb: 0x777777), lineWidth: 1)
-            }
-        case .aqua:
-            shape.strokeBorder(Color.black.opacity(isFocused ? 0.35 : 0.2), lineWidth: 1)
-        case .berry:
-            shape.strokeBorder(LinearGradient(colors: [Color(rgb: 0xE1E5EA), Color(rgb: 0x6C727C), Color(rgb: 0xB8BEC6)],
-                                              startPoint: .top, endPoint: .bottom), lineWidth: 2)
-        case .dotMatrix:
-            shape.strokeBorder(Color.primary.opacity(isFocused ? 0.25 : 0.12), lineWidth: 1)
         }
     }
 }
@@ -415,15 +424,17 @@ struct ClassicBevel: View {
     var line: CGFloat = 1.5
 
     var body: some View {
-        GeometryReader { proxy in
-            let w = proxy.size.width, h = proxy.size.height
-            let colors = self.colors
-            ZStack(alignment: .topLeading) {
-                edge(colors.0, colors.1, w, h, inset: 0)
-                if thick { edge(colors.2, colors.3, w, h, inset: line) }
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                let w = proxy.size.width, h = proxy.size.height
+                let colors = self.colors
+                ZStack(alignment: .topLeading) {
+                    edge(colors.0, colors.1, w, h, inset: 0)
+                    if thick { edge(colors.2, colors.3, w, h, inset: line) }
+                }
             }
+            .allowsHitTesting(false)
         }
-        .allowsHitTesting(false)
     }
 
     private var colors: (Color, Color, Color, Color) {
@@ -466,7 +477,7 @@ extension View {
     @ViewBuilder
     func eraTitleTreatment(_ skin: EraSkin?, isFocused: Bool) -> some View {
         if skin == .dotMatrix {
-            fontDesign(nil)
+            fontDesignCompat(nil)
         } else if let skin {
             let shadow = skin.titleShadow(isFocused: isFocused)
             self.shadow(color: shadow?.color ?? .clear, radius: shadow?.radius ?? 0, x: shadow?.x ?? 0, y: shadow?.y ?? 0)
@@ -481,7 +492,7 @@ extension View {
 extension View {
     /// The dot-matrix face; the desktop's font-design setting would otherwise swap it for SF.
     func dotMatrixFont(size: CGFloat) -> some View {
-        font(EraFonts.dot(size: size)).fontDesign(nil)
+        font(EraFonts.dot(size: size)).fontDesignCompat(nil)
     }
 }
 
@@ -539,21 +550,23 @@ struct DesktopStyleChooser: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(DesktopStyle.groups) { group in
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(group.title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(theme.secondaryText)
-                        .accessibilityAddTraits(.isHeader)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], alignment: .leading, spacing: 6) {
-                        ForEach(group.styles) { chip($0) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(DesktopStyle.groups) { group in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(group.title)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(theme.secondaryText)
+                            .accessibilityAddTraits(.isHeader)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 104), spacing: 6)], alignment: .leading, spacing: 6) {
+                            ForEach(group.styles) { chip($0) }
+                        }
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("settings.style")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("settings.style")
     }
 
     private func chip(_ style: DesktopStyle) -> some View {

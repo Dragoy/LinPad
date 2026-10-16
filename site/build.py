@@ -909,7 +909,7 @@ def home(themes: list[dict], shortcuts: list[tuple[str, str, str]]) -> str:
     <div class="install-card">
       <p class="kicker"><span aria-hidden="true">$</span> pre-release, free</p>
       <h2 id="get-h" class="h-xl">Get LinPad.</h2>
-      <p class="lede">Free, for iPads with M1 or newer on iPadOS 17 or later. Add the source to SideStore or AltStore, or download the IPA. The install guide is written for people who have never sideloaded an app.</p>
+      <p class="lede">Free, for iPads with M1 or newer on iPadOS 16 or later. Add the source to SideStore or AltStore, or download the IPA. The install guide is written for people who have never sideloaded an app.</p>
       <div class="copy"><code id="source-url">{SOURCE_URL}</code><button class="btn btn-ghost btn-small" type="button" data-copy="source-url">Copy</button></div>
       <div class="cta-row cta-left">
         <a class="btn btn-primary" href="/download/">Download LinPad</a>
@@ -928,7 +928,7 @@ def home(themes: list[dict], shortcuts: list[tuple[str, str, str]]) -> str:
         "alternateName": ["LinPad OS", "Linux for iPad"],
         "description": "Linux for iPad: usermode Alpine Linux, a native SwiftUI desktop and real Linux apps as iPad windows. Free and open source.",
         "applicationCategory": "DeveloperApplication",
-        "operatingSystem": "iPadOS 17 or later",
+        "operatingSystem": "iPadOS 16 or later",
         "license": "https://www.gnu.org/licenses/gpl-3.0.html",
         "url": DOMAIN + "/",
         "image": DOMAIN + "/media/og.jpg",
@@ -1031,7 +1031,7 @@ def download_page() -> str:
     <dl class="dl-facts">
       <div><dt>Version</dt><dd>{esc(rel.version)}</dd></div>
       <div><dt>Size</dt><dd>{size}</dd></div>
-      <div><dt>Needs</dt><dd>iPad with M1 or newer, iPadOS 17 or later</dd></div>
+      <div><dt>Needs</dt><dd>iPad with M1 or newer, iPadOS 16 or later</dd></div>
       <div class="wide"><dt>SHA-256</dt><dd>{sha}</dd></div>
     </dl>
     <p class="fineprint">The link always points to the newest release on GitHub. <a href="{GITHUB}/releases">All releases and notes</a>.</p>
@@ -1085,7 +1085,7 @@ def install_page() -> str:
 
   <h2 id="need">What you need</h2>
   <ul class="needs">
-    <li><b>An iPad with an M1 chip or newer</b> (iPad Pro 2021 or later, iPad Air 2022 or later), on iPadOS 17 or later. 8 GB of memory or more is best for VS Code.</li>
+    <li><b>An iPad with an M1 chip or newer</b> (iPad Pro 2021 or later, iPad Air 2022 or later), on iPadOS 16 or later. 8 GB of memory or more is best for VS Code.</li>
     <li><b>A free Apple ID.</b> The one you already use works. A paid developer account works too and removes the 7-day limit.</li>
     <li><b>A Mac, Windows or Linux computer and a USB cable,</b> once, for the first setup.</li>
     <li><b>Wi-Fi</b> and a few GB of free space: the Linux system unpacks to about 2.3 GB.</li>
@@ -1405,7 +1405,7 @@ FAQ = [
     ("What is JIT and do I need it?",
      "<p>A JIT turns Linux programs into native ARM64 code as they run. iPadOS only allows that while a debugger is attached, so LinPad uses StikDebug for it. Without it, LinPad runs everything on an interpreter: it works, but it is several times slower. We measured about 4.8× on a Mac; iPad figures are not measured yet.</p>"),
     ("Which iPads work?",
-     "<p>iPads with Apple Silicon, M1 or newer, on iPadOS 17 or later. It is developed on an iPad Air with M3. VS Code needs a lot of memory, so 8 GB or more is recommended for it.</p>"),
+     "<p>iPads with Apple Silicon, M1 or newer, on iPadOS 16 or later. It is developed on an iPad Air with M3. VS Code needs a lot of memory, so 8 GB or more is recommended for it.</p>"),
     ("What about battery life?",
      "<p>Not measured yet, and we would rather publish a real number than guess. Emulation costs more CPU than a native app, so expect heavy work (compiling, Firefox on big pages) to drain faster than native iPad apps. An idle desktop does little. We will publish device measurements with v1.0.</p>"),
     ("Is it safe?",
@@ -1604,7 +1604,7 @@ def press_page() -> str:
   <div class="table-wrap"><table>
     <tr><th scope="row">Name</th><td>LinPad (subtitle: Linux for iPad)</td></tr>
     <tr><th scope="row">Status</th><td>Pre-release; first public version in preparation</td></tr>
-    <tr><th scope="row">Platform</th><td>iPadOS 17+, iPads with M1 or newer</td></tr>
+    <tr><th scope="row">Platform</th><td>iPadOS 16+, iPads with M1 or newer</td></tr>
     <tr><th scope="row">Distribution</th><td>Sideloaded (SideStore, AltStore, IPA). Not on the App Store.</td></tr>
     <tr><th scope="row">Licence</th><td>GNU GPLv3</td></tr>
     <tr><th scope="row">Based on</th><td>iSH and iSH-ARM64</td></tr>

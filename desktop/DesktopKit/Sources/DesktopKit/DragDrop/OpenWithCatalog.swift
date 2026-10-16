@@ -1,9 +1,9 @@
 import Foundation
-import Observation
+import Perception
 
 /// "Open With": which Linux applications (by their .desktop `MimeType=`) and which native
 /// apps can open a file, with MIME types from the guest's shared-mime-info glob table.
-@Observable @MainActor
+@Perceptible @MainActor
 final class OpenWithCatalog {
     struct Application: Identifiable, Equatable {
         let id: String          // desktop id, or the native app id
@@ -17,8 +17,8 @@ final class OpenWithCatalog {
     static let shared = OpenWithCatalog()
 
     private(set) var linuxApplications: [Application] = []
-    @ObservationIgnored private var globs: [String: String] = [:]
-    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @PerceptionIgnored private var globs: [String: String] = [:]
+    @PerceptionIgnored private var loadTask: Task<Void, Never>?
 
     private static let applicationsDirectory = "/usr/share/applications"
     private static let globsFile = "/usr/share/mime/globs2"

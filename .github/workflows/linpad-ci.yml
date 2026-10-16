@@ -137,7 +137,7 @@ jobs:
         env:
           SIM: ${{ steps.sim.outputs.udid }}
         run: |
-          xcodebuild test -scheme DesktopKit -destination "id=$SIM" \
+          xcodebuild test -skipMacroValidation -scheme DesktopKit -destination "id=$SIM" \
             -derivedDataPath "$RUNNER_TEMP/dd" -resultBundlePath "$RUNNER_TEMP/DesktopKit.xcresult" \
             CODE_SIGNING_ALLOWED=NO -quiet
 
@@ -160,7 +160,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew install llvm lld meson libarchive
+          brew install llvm lld meson libarchive coreutils
           echo "$(brew --prefix lld)/bin" >> "$GITHUB_PATH"
 
       - name: Configure and build (arm64 guest, JIT enabled)

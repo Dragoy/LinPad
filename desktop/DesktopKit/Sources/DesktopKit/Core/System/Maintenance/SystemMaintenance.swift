@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 import OSLog
 
 /// How "Reset to Factory" treats the user's data.
@@ -27,7 +27,7 @@ public protocol LinuxSystemResetting: AnyObject {
 /// Settings › Maintenance: "Repair System" (re-applies the bundled repair kit in the
 /// guest, keeping all user data), the silent repair after an app update, and scheduling
 /// "Reset to Factory". One per host.
-@Observable @MainActor
+@Perceptible @MainActor
 final class SystemMaintenanceService {
     enum RepairState: Equatable {
         case idle
@@ -54,15 +54,15 @@ final class SystemMaintenanceService {
     var isRepairSheetRequested = false
     var isResetSheetRequested = false
 
-    @ObservationIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
-    @ObservationIgnored var restartSession: (() async -> Void)?
-    @ObservationIgnored var showSettings: (() -> Void)?
+    @PerceptionIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
+    @PerceptionIgnored var restartSession: (() async -> Void)?
+    @PerceptionIgnored var showSettings: (() -> Void)?
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored let kit: RepairKit?
-    @ObservationIgnored private var startedAutomaticCheck = false
-    @ObservationIgnored private var splitter = LineSplitter()
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored let kit: RepairKit?
+    @PerceptionIgnored private var startedAutomaticCheck = false
+    @PerceptionIgnored private var splitter = LineSplitter()
     private static let logger = Logger(subsystem: "DesktopKit", category: "Maintenance")
     private static let maxLogLines = 600
     private static let guestKitDirectory = "/tmp/linpad-repair-kit"
@@ -73,7 +73,7 @@ final class SystemMaintenanceService {
         self.defaults = defaults
     }
 
-    @ObservationIgnored private static var services: [ObjectIdentifier: SystemMaintenanceService] = [:]
+    @PerceptionIgnored private static var services: [ObjectIdentifier: SystemMaintenanceService] = [:]
 
     static func shared(for host: any LinuxHost) -> SystemMaintenanceService {
         let key = ObjectIdentifier(host)

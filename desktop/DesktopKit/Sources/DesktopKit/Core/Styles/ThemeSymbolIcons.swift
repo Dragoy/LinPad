@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// The icon pack's names for the SF Symbols the shell uses in its tray, Quick Settings,
@@ -158,13 +159,15 @@ struct ThemedLabel: View {
     }
 
     var body: some View {
-        Label {
-            Text(title)
-        } icon: {
-            if let image = icons?.menuImage(ThemeIconNames.names(forSymbol: systemImage), points: points) {
-                Image(uiImage: image)
-            } else {
-                Image(systemName: systemImage)
+        WithPerceptionTracking {
+            Label {
+                Text(title)
+            } icon: {
+                if let image = icons?.menuImage(ThemeIconNames.names(forSymbol: systemImage), points: points) {
+                    Image(uiImage: image)
+                } else {
+                    Image(systemName: systemImage)
+                }
             }
         }
     }

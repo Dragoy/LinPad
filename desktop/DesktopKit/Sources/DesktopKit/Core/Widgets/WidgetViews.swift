@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 private struct WidgetsAreLiveKey: EnvironmentKey {
     static let defaultValue = true
@@ -20,16 +21,18 @@ struct DesktopWidgetContent: View {
     let setOption: (String, String?) -> Void
 
     var body: some View {
-        switch widget.kind {
-        case .clock: ClockWidget(isAnalog: widget.options["style"] != "digital")
-        case .calendar: CalendarWidget(store: controller.calendarStore, controller: controller)
-        case .weather: WeatherWidget(model: controller.widgets.weather)
-        case .systemMonitor: SystemMonitorWidget(controller: controller)
-        case .nowPlaying: NowPlayingWidget(center: controller.nowPlaying)
-        case .notes: NotesWidget(text: widget.options["text"] ?? "", onChange: { setOption("text", $0) })
-        case .battery: BatteryWidget(status: controller.systemStatus)
-        case .network: NetworkWidget(status: controller.systemStatus)
-        case .upcomingEvents: UpcomingEventsWidget(store: controller.calendarStore, controller: controller)
+        WithPerceptionTracking {
+            switch widget.kind {
+            case .clock: ClockWidget(isAnalog: widget.options["style"] != "digital")
+            case .calendar: CalendarWidget(store: controller.calendarStore, controller: controller)
+            case .weather: WeatherWidget(model: controller.widgets.weather)
+            case .systemMonitor: SystemMonitorWidget(controller: controller)
+            case .nowPlaying: NowPlayingWidget(center: controller.nowPlaying)
+            case .notes: NotesWidget(text: widget.options["text"] ?? "", onChange: { setOption("text", $0) })
+            case .battery: BatteryWidget(status: controller.systemStatus)
+            case .network: NetworkWidget(status: controller.systemStatus)
+            case .upcomingEvents: UpcomingEventsWidget(store: controller.calendarStore, controller: controller)
+            }
         }
     }
 }
@@ -41,26 +44,28 @@ struct ClockWidget: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            if isAnalog {
-                AnalogClockFace(date: context.date)
-                    .padding(4)
-            } else {
-                VStack(spacing: 4) {
-                    Text(context.date.formatted(.dateTime.hour().minute()))
-                        .font(.system(size: 44, weight: .semibold, design: .rounded).monospacedDigit())
-                        .minimumScaleFactor(0.4)
-                        .lineLimit(1)
-                    Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(theme.secondaryText)
-                        .lineLimit(1)
+        WithPerceptionTracking {
+            TimelineView(.everyMinute) { context in
+                if isAnalog {
+                    AnalogClockFace(date: context.date)
+                        .padding(4)
+                } else {
+                    VStack(spacing: 4) {
+                        Text(context.date.formatted(.dateTime.hour().minute()))
+                            .font(.system(size: 44, weight: .semibold, design: .rounded).monospacedDigit())
+                            .minimumScaleFactor(0.4)
+                            .lineLimit(1)
+                        Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.abbreviated)))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(theme.secondaryText)
+                            .lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(Date().formatted(date: .omitted, time: .shortened))
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Date().formatted(date: .omitted, time: .shortened))
     }
 }
 
@@ -71,34 +76,36 @@ struct AnalogClockFace: View {
     @Environment(\.calendar) private var calendar
 
     var body: some View {
-        Canvas { context, size in
-            let side = min(size.width, size.height)
-            let center = CGPoint(x: size.width / 2, y: size.height / 2)
-            let radius = side / 2
-            context.fill(Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: side, height: side)),
-                         with: .color(theme.primaryText.opacity(0.06)))
-            for tick in 0..<60 {
-                let isHour = tick % 5 == 0
-                let angle = Angle.degrees(Double(tick) * 6 - 90)
-                let outer = radius - 4
-                let inner = outer - (isHour ? radius * 0.12 : radius * 0.05)
-                var path = Path()
-                path.move(to: point(center, inner, angle))
-                path.addLine(to: point(center, outer, angle))
-                context.stroke(path, with: .color(isHour ? theme.primaryText : theme.secondaryText.opacity(0.5)),
-                               lineWidth: isHour ? 2 : 1)
+        WithPerceptionTracking {
+            Canvas { context, size in
+                let side = min(size.width, size.height)
+                let center = CGPoint(x: size.width / 2, y: size.height / 2)
+                let radius = side / 2
+                context.fill(Path(ellipseIn: CGRect(x: center.x - radius, y: center.y - radius, width: side, height: side)),
+                             with: .color(theme.primaryText.opacity(0.06)))
+                for tick in 0..<60 {
+                    let isHour = tick % 5 == 0
+                    let angle = Angle.degrees(Double(tick) * 6 - 90)
+                    let outer = radius - 4
+                    let inner = outer - (isHour ? radius * 0.12 : radius * 0.05)
+                    var path = Path()
+                    path.move(to: point(center, inner, angle))
+                    path.addLine(to: point(center, outer, angle))
+                    context.stroke(path, with: .color(isHour ? theme.primaryText : theme.secondaryText.opacity(0.5)),
+                                   lineWidth: isHour ? 2 : 1)
+                }
+                let parts = calendar.dateComponents([.hour, .minute], from: date)
+                let minute = Double(parts.minute ?? 0)
+                let hour = Double((parts.hour ?? 0) % 12) + minute / 60
+                hand(context, center, length: radius * 0.5, angle: .degrees(hour * 30 - 90), width: 4.5, color: theme.primaryText)
+                hand(context, center, length: radius * 0.78, angle: .degrees(minute * 6 - 90), width: 3, color: theme.primaryText)
+                context.fill(Path(ellipseIn: CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)), with: .color(theme.accent))
             }
-            let parts = calendar.dateComponents([.hour, .minute], from: date)
-            let minute = Double(parts.minute ?? 0)
-            let hour = Double((parts.hour ?? 0) % 12) + minute / 60
-            hand(context, center, length: radius * 0.5, angle: .degrees(hour * 30 - 90), width: 4.5, color: theme.primaryText)
-            hand(context, center, length: radius * 0.78, angle: .degrees(minute * 6 - 90), width: 3, color: theme.primaryText)
-            context.fill(Path(ellipseIn: CGRect(x: center.x - 4, y: center.y - 4, width: 8, height: 8)), with: .color(theme.accent))
         }
     }
 
     private func point(_ center: CGPoint, _ distance: CGFloat, _ angle: Angle) -> CGPoint {
-        CGPoint(x: center.x + cos(angle.radians) * distance, y: center.y + sin(angle.radians) * distance)
+        CGPoint(x: center.x + CGFloat(cos(Double(angle.radians))) * distance, y: center.y + CGFloat(sin(Double(angle.radians))) * distance)
     }
 
     private func hand(_ context: GraphicsContext, _ center: CGPoint, length: CGFloat, angle: Angle, width: CGFloat, color: Color) {
@@ -116,18 +123,20 @@ struct CalendarWidget: View {
     let controller: DesktopController
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            TimelineView(.everyMinute) { context in
-                MiniMonthView(store: store, month: .constant(CalendarMath.startOfMonth(context.date, calendar: .current)),
-                              selection: nil, showsNavigation: false, compact: true) { day in
-                    controller.open(appID: CalendarApp.id, arguments: [CalendarApp.dateArgument: CalendarApp.argument(for: day)])
-                    NotificationCenter.default.post(name: CalendarApp.showDateRequested, object: nil,
-                                                    userInfo: [CalendarApp.dateArgument: day])
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                TimelineView(.everyMinute) { context in
+                    MiniMonthView(store: store, month: .constant(CalendarMath.startOfMonth(context.date, calendar: .current)),
+                                  selection: nil, showsNavigation: false, compact: true) { day in
+                        controller.open(appID: CalendarApp.id, arguments: [CalendarApp.dateArgument: CalendarApp.argument(for: day)])
+                        NotificationCenter.default.post(name: CalendarApp.showDateRequested, object: nil,
+                                                        userInfo: [CalendarApp.dateArgument: day])
+                    }
                 }
+                .frame(maxWidth: .infinity)
+                UpcomingEventsList(store: store, limit: 2, days: 14, compact: true)
+                Spacer(minLength: 0)
             }
-            .frame(maxWidth: .infinity)
-            UpcomingEventsList(store: store, limit: 2, days: 14, compact: true)
-            Spacer(minLength: 0)
         }
     }
 }
@@ -138,16 +147,18 @@ struct UpcomingEventsWidget: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            WidgetHeader(title: "Up Next", symbol: "calendar")
-            ScrollView {
-                UpcomingEventsList(store: store, limit: 12, days: 14, compact: true) { event in
-                    controller.open(appID: CalendarApp.id, arguments: [CalendarApp.dateArgument: CalendarApp.argument(for: event.start)])
-                    NotificationCenter.default.post(name: CalendarApp.showDateRequested, object: nil,
-                                                    userInfo: [CalendarApp.dateArgument: event.start])
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                WidgetHeader(title: "Up Next", symbol: "calendar")
+                ScrollView {
+                    UpcomingEventsList(store: store, limit: 12, days: 14, compact: true) { event in
+                        controller.open(appID: CalendarApp.id, arguments: [CalendarApp.dateArgument: CalendarApp.argument(for: event.start)])
+                        NotificationCenter.default.post(name: CalendarApp.showDateRequested, object: nil,
+                                                        userInfo: [CalendarApp.dateArgument: event.start])
+                    }
                 }
+                .scrollIndicators(.hidden)
             }
-            .scrollIndicators(.hidden)
         }
     }
 }
@@ -161,36 +172,38 @@ struct WeatherWidget: View {
     @State private var cityDraft = ""
 
     var body: some View {
-        Group {
-            if let report = model.report {
-                reportView(report)
-            } else if model.needsCity || model.error != nil {
-                VStack(alignment: .leading, spacing: 8) {
-                    WidgetHeader(title: "Weather", symbol: "cloud.sun")
-                    Text(model.error ?? "Type a city to see its weather.")
-                        .font(.system(size: 12))
-                        .foregroundStyle(theme.secondaryText)
-                    cityField
-                    Spacer(minLength: 0)
+        WithPerceptionTracking {
+            Group {
+                if let report = model.report {
+                    reportView(report)
+                } else if model.needsCity || model.error != nil {
+                    VStack(alignment: .leading, spacing: 8) {
+                        WidgetHeader(title: "Weather", symbol: "cloud.sun")
+                        Text(model.error ?? "Type a city to see its weather.")
+                            .font(.system(size: 12))
+                            .foregroundStyle(theme.secondaryText)
+                        cityField
+                        Spacer(minLength: 0)
+                    }
+                } else {
+                    ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
-            } else {
-                ProgressView().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-        }
-        .task(id: isLive) {
-            guard isLive else { return }
-            while !Task.isCancelled {
-                await model.refreshIfStale()
-                do { try await Task.sleep(for: .seconds(60)) } catch { return }
+            .task(id: isLive) {
+                guard isLive else { return }
+                while !Task.isCancelled {
+                    await model.refreshIfStale()
+                    do { try await Task.sleep(for: .seconds(60)) } catch { return }
+                }
             }
-        }
-        .contextMenu {
-            Button { Task { await model.refresh() } } label: { ThemedLabel("Refresh", systemImage: "arrow.clockwise") }
-            if !model.city.isEmpty {
-                Button {
-                    model.city = ""
-                    Task { await model.refresh() }
-                } label: { ThemedLabel("Use Current Location", systemImage: "location") }
+            .contextMenu {
+                Button { Task { await model.refresh() } } label: { ThemedLabel("Refresh", systemImage: "arrow.clockwise") }
+                if !model.city.isEmpty {
+                    Button {
+                        model.city = ""
+                        Task { await model.refresh() }
+                    } label: { ThemedLabel("Use Current Location", systemImage: "location") }
+                }
             }
         }
     }
@@ -266,29 +279,31 @@ struct SystemMonitorWidget: View {
     private var disk: DiskUsageMonitor { controller.widgets.disk }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            WidgetHeader(title: "System", symbol: "gauge.with.dots.needle.33percent")
-            meter("CPU", value: monitor.cpuUsage)
-            meter("Memory", value: monitor.memoryUsage)
-            meter("Disk", value: disk.usage?.fraction,
-                  detail: disk.usage.map { ByteCountFormatter.string(fromByteCount: $0.usedBytes, countStyle: .file) })
-            Spacer(minLength: 0)
-            if let engine = controller.cpuEngine {
-                Label(engine.title, systemImage: engine == .nativeJIT ? "bolt.fill" : "tortoise")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(engine == .nativeJIT ? Color.green : theme.secondaryText)
-                    .lineLimit(1)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                WidgetHeader(title: "System", symbol: "gauge.with.dots.needle.33percent")
+                meter("CPU", value: monitor.cpuUsage)
+                meter("Memory", value: monitor.memoryUsage)
+                meter("Disk", value: disk.usage?.fraction,
+                      detail: disk.usage.map { ByteCountFormatter.string(fromByteCount: $0.usedBytes, countStyle: .file) })
+                Spacer(minLength: 0)
+                if let engine = controller.cpuEngine {
+                    Label(engine.title, systemImage: engine == .nativeJIT ? "bolt.fill" : "tortoise")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(engine == .nativeJIT ? Color.green : theme.secondaryText)
+                        .lineLimit(1)
+                }
             }
-        }
-        .task(id: isLive) {
-            guard isLive else { return }
-            await disk.poll(controller.host)
-        }
-        .task(id: isLive && style != .ish) {
-            // Only the iSH panel (PanelView) feeds the CPU and memory meters; elsewhere the
-            // widget has to.
-            guard isLive, style != .ish else { return }
-            await monitor.poll(controller.host)
+            .task(id: isLive) {
+                guard isLive else { return }
+                await disk.poll(controller.host)
+            }
+            .task(id: isLive && style != .ish) {
+                // Only the iSH panel (PanelView) feeds the CPU and memory meters; elsewhere the
+                // widget has to.
+                guard isLive, style != .ish else { return }
+                await monitor.poll(controller.host)
+            }
         }
     }
 
@@ -298,7 +313,7 @@ struct SystemMonitorWidget: View {
                 Text(title).font(.system(size: 11, weight: .medium))
                 Spacer()
                 Text(detail.map { "\($0) · " } ?? "")
-                    .font(.system(size: 10)).foregroundStyle(theme.secondaryText)
+                    .font(.system(size: 10)).foregroundColor(theme.secondaryText)
                 + Text(value.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
                     .font(.system(size: 11, weight: .semibold).monospacedDigit())
             }
@@ -326,14 +341,16 @@ struct NowPlayingWidget: View {
     @Environment(\.widgetsAreLive) private var isLive
 
     var body: some View {
-        Group {
-            if isLive {
-                NowPlayingCard(center: center, isCompact: true)
-            } else {
-                Color.clear
+        WithPerceptionTracking {
+            Group {
+                if isLive {
+                    NowPlayingCard(center: center, isCompact: true)
+                } else {
+                    Color.clear
+                }
             }
+            .frame(maxHeight: .infinity)
         }
-        .frame(maxHeight: .infinity)
     }
 }
 
@@ -342,24 +359,26 @@ struct BatteryWidget: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                Circle().stroke(theme.primaryText.opacity(0.1), lineWidth: 7)
-                Circle().trim(from: 0, to: CGFloat(status.batteryLevel ?? 0))
-                    .stroke(levelColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                Image(systemName: status.batteryState == .charging || status.batteryState == .full ? "bolt.fill" : "ipad.landscape")
-                    .font(.system(size: 18, weight: .semibold))
+        WithPerceptionTracking {
+            VStack(spacing: 6) {
+                ZStack {
+                    Circle().stroke(theme.primaryText.opacity(0.1), lineWidth: 7)
+                    Circle().trim(from: 0, to: CGFloat(status.batteryLevel ?? 0))
+                        .stroke(levelColor, style: StrokeStyle(lineWidth: 7, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                    Image(systemName: status.batteryState == .charging || status.batteryState == .full ? "bolt.fill" : "ipad.landscape")
+                        .font(.system(size: 18, weight: .semibold))
+                }
+                .padding(6)
+                Text(status.batteryLevel.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
+                    .font(.system(size: 14, weight: .semibold).monospacedDigit())
             }
-            .padding(6)
-            Text(status.batteryLevel.map { "\(Int(($0 * 100).rounded()))%" } ?? "—")
-                .font(.system(size: 14, weight: .semibold).monospacedDigit())
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .onAppear { status.start() }
+            .onDisappear { status.stop() }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Battery")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .onAppear { status.start() }
-        .onDisappear { status.stop() }
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Battery")
     }
 
     private var levelColor: Color {
@@ -374,23 +393,25 @@ struct NetworkWidget: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: status.network.symbol)
-                .font(.system(size: 26, weight: .semibold))
-                .foregroundStyle(status.network == .offline ? theme.secondaryText : theme.accent)
-                .frame(width: 40)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(status.network.title).font(.system(size: 15, weight: .semibold))
-                Text(status.network == .offline ? "Linux apps are offline" : "Linux apps are online")
-                    .font(.system(size: 11))
-                    .foregroundStyle(theme.secondaryText)
+        WithPerceptionTracking {
+            HStack(spacing: 12) {
+                Image(systemName: status.network.symbol)
+                    .font(.system(size: 26, weight: .semibold))
+                    .foregroundStyle(status.network == .offline ? theme.secondaryText : theme.accent)
+                    .frame(width: 40)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(status.network.title).font(.system(size: 15, weight: .semibold))
+                    Text(status.network == .offline ? "Linux apps are offline" : "Linux apps are online")
+                        .font(.system(size: 11))
+                        .foregroundStyle(theme.secondaryText)
+                }
+                Spacer(minLength: 0)
             }
-            Spacer(minLength: 0)
+            .frame(maxHeight: .infinity)
+            .onAppear { status.start() }
+            .onDisappear { status.stop() }
+            .accessibilityElement(children: .combine)
         }
-        .frame(maxHeight: .infinity)
-        .onAppear { status.start() }
-        .onDisappear { status.stop() }
-        .accessibilityElement(children: .combine)
     }
 }
 
@@ -403,23 +424,25 @@ struct NotesWidget: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        TextEditor(text: $draft)
-            .scrollContentBackground(.hidden)
-            .font(.system(size: 13))
-            .foregroundStyle(theme.primaryText)
-            .overlay(alignment: .topLeading) {
-                if draft.isEmpty {
-                    Text("Note")
-                        .font(.system(size: 13))
-                        .foregroundStyle(theme.secondaryText)
-                        .padding(.top, 8)
-                        .padding(.leading, 5)
-                        .allowsHitTesting(false)
+        WithPerceptionTracking {
+            TextEditor(text: $draft)
+                .scrollContentBackground(.hidden)
+                .font(.system(size: 13))
+                .foregroundStyle(theme.primaryText)
+                .overlay(alignment: .topLeading) {
+                    if draft.isEmpty {
+                        Text("Note")
+                            .font(.system(size: 13))
+                            .foregroundStyle(theme.secondaryText)
+                            .padding(.top, 8)
+                            .padding(.leading, 5)
+                            .allowsHitTesting(false)
+                    }
                 }
-            }
-            .onAppear { draft = text }
-            .onChange(of: draft) { _, value in if value != text { onChange(value) } }
-            .accessibilityIdentifier("widget.notes.text")
+                .onAppear { draft = text }
+                .onChangeCompat(of: draft) { _, value in if value != text { onChange(value) } }
+                .accessibilityIdentifier("widget.notes.text")
+        }
     }
 }
 
@@ -429,9 +452,11 @@ struct WidgetHeader: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Label(title, systemImage: symbol)
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(theme.secondaryText)
-            .lineLimit(1)
+        WithPerceptionTracking {
+            Label(title, systemImage: symbol)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(theme.secondaryText)
+                .lineLimit(1)
+        }
     }
 }

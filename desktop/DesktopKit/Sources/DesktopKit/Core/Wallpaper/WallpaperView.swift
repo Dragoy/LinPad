@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Draws a wallpaper source edge to edge in the chosen fill mode, cross-fading when it
 /// changes (a plain cut with Reduce Motion).
@@ -16,17 +17,19 @@ struct WallpaperView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            content(for: source)
-                .id(source)
-                .transition(.opacity)
+        WithPerceptionTracking {
+            ZStack {
+                content(for: source)
+                    .id(source)
+                    .transition(.opacity)
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: source)
+            .clipped()
+            .accessibilityElement()
+            .accessibilityLabel("Wallpaper")
+            .accessibilityValue(source.identifier)
+            .accessibilityIdentifier(accessibilityID)
         }
-        .animation(reduceMotion ? nil : .easeInOut(duration: 0.8), value: source)
-        .clipped()
-        .accessibilityElement()
-        .accessibilityLabel("Wallpaper")
-        .accessibilityValue(source.identifier)
-        .accessibilityIdentifier(accessibilityID)
     }
 
     @ViewBuilder

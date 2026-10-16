@@ -147,13 +147,17 @@ final class ISHBackgroundKeeper: NSObject, CLLocationManagerDelegate {
             manager.allowsBackgroundLocationUpdates = true
             manager.showsBackgroundLocationIndicator = true
             manager.startUpdatingLocation()
-            activitySession = CLBackgroundActivitySession()
+            if #available(iOS 17.0, *) {
+                activitySession = CLBackgroundActivitySession()
+            }
             isUpdating = true
             log.info("keeping Linux running in the background (location)")
         } else if !wanted && isUpdating {
             manager?.stopUpdatingLocation()
             manager?.allowsBackgroundLocationUpdates = false
-            (activitySession as? CLBackgroundActivitySession)?.invalidate()
+            if #available(iOS 17.0, *) {
+                (activitySession as? CLBackgroundActivitySession)?.invalidate()
+            }
             activitySession = nil
             isUpdating = false
             log.info("background location off")

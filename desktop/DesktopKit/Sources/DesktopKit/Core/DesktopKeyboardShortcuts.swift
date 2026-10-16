@@ -273,7 +273,7 @@ final class DesktopKeyCommands {
         var wanted = table.map {
             Self.keyCommand(title: $0.title, key: $0.key, modifiers: $0.modifiers, id: $0.id)
         }
-        if !table.contains(where: { $0.key == "w" && $0.modifiers == .command }) {
+        if !table.contains(where: { $0.key.character == "w" && $0.modifiers.rawValue == EventModifiers.command.rawValue }) {
             let guardCommand = UIKeyCommand(title: "", action: #selector(UIResponder.desktopPerformKeyCommand(_:)),
                                             input: "w", modifierFlags: .command, propertyList: "app.commandW")
             guardCommand.wantsPriorityOverSystemBehavior = true
@@ -377,23 +377,24 @@ final class DesktopKeyCommands {
         return command
     }
 
-    private static func input(for key: KeyEquivalent) -> String {
-        switch key {
-        case .leftArrow: UIKeyCommand.inputLeftArrow
-        case .rightArrow: UIKeyCommand.inputRightArrow
-        case .upArrow: UIKeyCommand.inputUpArrow
-        case .downArrow: UIKeyCommand.inputDownArrow
-        case .escape: UIKeyCommand.inputEscape
-        case .return: "\r"
+    static func input(for key: KeyEquivalent) -> String {
+        // Compares characters: KeyEquivalent is Equatable only from iOS 17.
+        switch key.character {
+        case KeyEquivalent.leftArrow.character: UIKeyCommand.inputLeftArrow
+        case KeyEquivalent.rightArrow.character: UIKeyCommand.inputRightArrow
+        case KeyEquivalent.upArrow.character: UIKeyCommand.inputUpArrow
+        case KeyEquivalent.downArrow.character: UIKeyCommand.inputDownArrow
+        case KeyEquivalent.escape.character: UIKeyCommand.inputEscape
+        case KeyEquivalent.return.character: "\r"
         // Backspace: the key labelled Delete on Apple keyboards.
-        case .delete: "\u{8}"
-        case .tab: "\t"
-        case .space: " "
+        case KeyEquivalent.delete.character: "\u{8}"
+        case KeyEquivalent.tab.character: "\t"
+        case KeyEquivalent.space.character: " "
         default: String(key.character)
         }
     }
 
-    private static func flags(for modifiers: EventModifiers) -> UIKeyModifierFlags {
+    static func flags(for modifiers: EventModifiers) -> UIKeyModifierFlags {
         var flags: UIKeyModifierFlags = []
         if modifiers.contains(.command) { flags.insert(.command) }
         if modifiers.contains(.control) { flags.insert(.control) }

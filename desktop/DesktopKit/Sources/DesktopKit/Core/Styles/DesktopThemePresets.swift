@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// A complete desktop theme: a layout style with its era chrome, a colour theme (with a dark
 /// partner where the era had one), styling, an original wallpaper and the GTK/Qt/icon/font
@@ -267,31 +268,37 @@ struct DesktopThemesSection: View {
     @AppStorage(DesktopThemePreset.snapshotKey) private var snapshot: Data?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Desktop Themes").font(.system(size: 17, weight: .semibold))
-                    Text("Window chrome, panels, colours, wallpaper, and the matching GTK, icon and font set for Linux apps.")
-                        .font(.caption).foregroundStyle(theme.secondaryText)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Desktop Themes").font(.system(size: 17, weight: .semibold))
+                        Text("Window chrome, panels, colours, wallpaper, and the matching GTK, icon and font set for Linux apps.")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                    }
+                    Spacer()
+                    if snapshot != nil {
+                        Button("Revert to Previous Look") { controller.revertDesktopThemePreset() }
+                            .buttonStyle(.bordered)
+                            .accessibilityIdentifier("themes.desktop.revert")
+                    }
                 }
-                Spacer()
-                if snapshot != nil {
-                    Button("Revert to Previous Look") { controller.revertDesktopThemePreset() }
-                        .buttonStyle(.bordered)
-                        .accessibilityIdentifier("themes.desktop.revert")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
+                    ForEach(DesktopThemePreset.all) { preset in
+                        WithPerceptionTracking {
+                            card(preset)
+                        }
+                    }
                 }
+                HStack {
+                    Text("Colour Themes").font(.system(size: 17, weight: .semibold))
+                    Spacer()
+                }
+                .padding(.top, 8)
             }
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
-                ForEach(DesktopThemePreset.all) { card($0) }
-            }
-            HStack {
-                Text("Colour Themes").font(.system(size: 17, weight: .semibold))
-                Spacer()
-            }
-            .padding(.top, 8)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("themes.desktop")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("themes.desktop")
     }
 
     private func card(_ preset: DesktopThemePreset) -> some View {
@@ -361,19 +368,23 @@ struct DesktopThemePreviewCard: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            let scale = max(proxy.size.width / Self.canvas.width, proxy.size.height / Self.canvas.height)
-            content
-                .frame(width: Self.canvas.width, height: Self.canvas.height)
-                .scaleEffect(scale, anchor: .topLeading)
-                .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                WithPerceptionTracking {
+                    let scale = max(proxy.size.width / Self.canvas.width, proxy.size.height / Self.canvas.height)
+                    content
+                        .frame(width: Self.canvas.width, height: Self.canvas.height)
+                        .scaleEffect(scale, anchor: .topLeading)
+                        .frame(width: proxy.size.width, height: proxy.size.height, alignment: .topLeading)
+                }
+            }
+            .clipped()
+            .environment(\.desktopTheme, desktopTheme)
+            .environment(\.desktopStyle, preset.style)
+            .environment(\.colorScheme, preset.startsDark ? .dark : .light)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
         }
-        .clipped()
-        .environment(\.desktopTheme, desktopTheme)
-        .environment(\.desktopStyle, preset.style)
-        .environment(\.colorScheme, preset.startsDark ? .dark : .light)
-        .allowsHitTesting(false)
-        .accessibilityHidden(true)
     }
 
     private var content: some View {
@@ -586,14 +597,16 @@ private struct PresetWallpaper: View {
     let wallpaper: DesktopThemePreset.Wallpaper
 
     var body: some View {
-        switch wallpaper {
-        case .color(let rgb):
-            Color(rgb: rgb)
-        case .builtIn(let name):
-            if let image = PresetWallpaperCache.image(name) {
-                Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
-            } else {
-                Color.gray
+        WithPerceptionTracking {
+            switch wallpaper {
+            case .color(let rgb):
+                Color(rgb: rgb)
+            case .builtIn(let name):
+                if let image = PresetWallpaperCache.image(name) {
+                    Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+                } else {
+                    Color.gray
+                }
             }
         }
     }

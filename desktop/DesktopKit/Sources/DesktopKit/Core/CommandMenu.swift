@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// One row of the Command Menu: an app, an open window, a desktop command, a toggle, a
 /// colour theme or a look, a clipboard entry, or a `linpad://` link typed in.
@@ -441,71 +442,75 @@ struct CommandMenuView: View {
     private var state: CommandMenuState { controller.commandMenu ?? CommandMenuState() }
 
     var body: some View {
-        let results = controller.commandMenuResults()
-        ZStack(alignment: .top) {
-            theme.scrim
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { controller.commandMenu = nil }
-                .accessibilityHidden(true)
-            VStack(spacing: 0) {
-                HStack(spacing: 10) {
-                    ThemeGlyph(symbol: "magnifyingglass", size: 15).foregroundStyle(theme.secondaryText)
-                    TextField(placeholder, text: Binding(
-                        get: { state.query },
-                        set: { controller.setCommandMenuQuery($0) }))
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 17))
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                        .focused($fieldFocused)
-                        .onSubmit { controller.runHighlightedCommand() }
-                        .accessibilityIdentifier("commandMenu.search")
-                        // A section's letter switches mode and clears the query; a fresh
-                        // field drops the letter the old one still shows.
-                        .id(state.mode)
-                        .onChange(of: state.mode) { fieldFocused = true }
-                    Text(shortcutHint).font(.caption.monospaced()).foregroundStyle(theme.secondaryText)
-                }
-                .padding(.horizontal, 16)
-                .frame(height: 52)
-                theme.separator.frame(height: 1)
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 1) {
-                            if results.isEmpty || isClipboard && results.count == 1 && state.query.isEmpty {
-                                Text(isClipboard && state.query.isEmpty
-                                     ? (ClipboardHistory.shared.isPaused ? "History is paused." : "Nothing copied yet. Copies made in LinPad and in Linux apps show up here.")
-                                     : "Nothing matches “\(state.query)”")
-                                    .font(.callout).foregroundStyle(theme.secondaryText)
-                                    .padding(16)
+        WithPerceptionTracking {
+            let results = controller.commandMenuResults()
+            ZStack(alignment: .top) {
+                theme.scrim
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { controller.commandMenu = nil }
+                    .accessibilityHidden(true)
+                VStack(spacing: 0) {
+                    HStack(spacing: 10) {
+                        ThemeGlyph(symbol: "magnifyingglass", size: 15).foregroundStyle(theme.secondaryText)
+                        TextField(placeholder, text: Binding(
+                            get: { state.query },
+                            set: { controller.setCommandMenuQuery($0) }))
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 17))
+                            .autocorrectionDisabled()
+                            .textInputAutocapitalization(.never)
+                            .focused($fieldFocused)
+                            .onSubmit { controller.runHighlightedCommand() }
+                            .accessibilityIdentifier("commandMenu.search")
+                            // A section's letter switches mode and clears the query; a fresh
+                            // field drops the letter the old one still shows.
+                            .id(state.mode)
+                            .onChange(of: state.mode) { _ in fieldFocused = true }
+                        Text(shortcutHint).font(.caption.monospaced()).foregroundStyle(theme.secondaryText)
+                    }
+                    .padding(.horizontal, 16)
+                    .frame(height: 52)
+                    theme.separator.frame(height: 1)
+                    ScrollViewReader { proxy in
+                        WithPerceptionTracking {
+                            ScrollView {
+                                LazyVStack(alignment: .leading, spacing: 1) {
+                                    if results.isEmpty || isClipboard && results.count == 1 && state.query.isEmpty {
+                                        Text(isClipboard && state.query.isEmpty
+                                             ? (ClipboardHistory.shared.isPaused ? "History is paused." : "Nothing copied yet. Copies made in LinPad and in Linux apps show up here.")
+                                             : "Nothing matches “\(state.query)”")
+                                            .font(.callout).foregroundStyle(theme.secondaryText)
+                                            .padding(16)
+                                    }
+                                    ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
+                                        row(item, isHighlighted: index == state.highlighted, showsSection: index == 0
+                                            || results[index - 1].section != item.section || !state.query.isEmpty && index == 0)
+                                            .id(item.id)
+                                    }
+                                }
+                                .padding(6)
                             }
-                            ForEach(Array(results.enumerated()), id: \.element.id) { index, item in
-                                row(item, isHighlighted: index == state.highlighted, showsSection: index == 0
-                                    || results[index - 1].section != item.section || !state.query.isEmpty && index == 0)
-                                    .id(item.id)
+                            .onChangeCompat(of: state.highlighted) { _, index in
+                                if results.indices.contains(index) { proxy.scrollTo(results[index].id, anchor: .center) }
                             }
                         }
-                        .padding(6)
                     }
-                    .onChange(of: state.highlighted) { _, index in
-                        if results.indices.contains(index) { proxy.scrollTo(results[index].id, anchor: .center) }
-                    }
+                    .frame(maxHeight: listHeight)
+                    theme.separator.frame(height: 1)
+                    footer
                 }
-                .frame(maxHeight: listHeight)
-                theme.separator.frame(height: 1)
-                footer
+                .frame(width: 640)
+                .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous).fill(theme.windowBackground))
+                .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
+                    .strokeBorder((theme.borderActive ?? theme.accent).opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 30, y: 12)
+                .padding(.top, 70)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("commandMenu")
             }
-            .frame(width: 640)
-            .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous).fill(theme.windowBackground))
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
-                .strokeBorder((theme.borderActive ?? theme.accent).opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.35), radius: 30, y: 12)
-            .padding(.top, 70)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("commandMenu")
+            .onAppear { fieldFocused = true }
         }
-        .onAppear { fieldFocused = true }
     }
 
     private var isClipboard: Bool { state.mode == .section(.clipboard) }

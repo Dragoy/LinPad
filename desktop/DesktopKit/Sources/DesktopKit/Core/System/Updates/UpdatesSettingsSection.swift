@@ -1,62 +1,65 @@
+import Perception
 import SwiftUI
 
 /// Settings › Updates: automatic checks, channel, the installed versions, the app and
 /// Linux system updates the latest release offers, and Alpine package upgrades.
 struct UpdatesSettingsSection: View {
-    @Bindable var service: UpdateService
+    @Perception.Bindable var service: UpdateService
     @Environment(\.desktopTheme) private var theme
     @State private var showsNotes = false
     @State private var showsIloaderHelp = false
     @State private var showsPackages = false
 
     var body: some View {
-        SettingsSection(title: "Updates", symbol: "arrow.triangle.2.circlepath", trailing: {
-            if service.checkState == .checking {
-                ProgressView().controlSize(.small)
-            } else {
-                ToolbarTextButton(title: "Check Now", symbol: "arrow.clockwise") {
-                    Task { await service.checkNow() }
+        WithPerceptionTracking {
+            SettingsSection(title: "Updates", symbol: "arrow.triangle.2.circlepath", trailing: {
+                if service.checkState == .checking {
+                    ProgressView().controlSize(.small)
+                } else {
+                    ToolbarTextButton(title: "Check Now", symbol: "arrow.clockwise") {
+                        Task { await service.checkNow() }
+                    }
+                    .disabled(service.network == .offline)
+                    .accessibilityIdentifier("settings.updates.checkNow")
                 }
-                .disabled(service.network == .offline)
-                .accessibilityIdentifier("settings.updates.checkNow")
-            }
-        }) {
-            if case .failed(let message) = service.checkState {
-                InlineBanner(kind: .warning, message: "Could not check for updates: \(message)")
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-            }
-            SettingsRow(title: "Check automatically") {
-                Toggle("Check automatically", isOn: $service.autoCheck)
-                    .labelsHidden()
-                    .tint(theme.accent)
-                    .accessibilityIdentifier("settings.updates.autoCheck")
-            }
-            SettingsRow(title: "Channel") {
-                Picker("Channel", selection: $service.channel) {
-                    ForEach(UpdateService.Channel.allCases) { Text($0.title).tag($0) }
+            }) {
+                if case .failed(let message) = service.checkState {
+                    InlineBanner(kind: .warning, message: "Could not check for updates: \(message)")
+                        .clipShape(RoundedRectangle(cornerRadius: 6))
                 }
-                .pickerStyle(.menu)
-                .fixedSize()
-                .accessibilityIdentifier("settings.updates.channel")
-            }
-            SettingsRow(title: "Last checked") {
-                Text(lastCheckedText)
-                    .font(.callout)
+                SettingsRow(title: "Check automatically") {
+                    Toggle("Check automatically", isOn: service.binding(\.autoCheck))
+                        .labelsHidden()
+                        .tint(theme.accent)
+                        .accessibilityIdentifier("settings.updates.autoCheck")
+                }
+                SettingsRow(title: "Channel") {
+                    Picker("Channel", selection: service.binding(\.channel)) {
+                        ForEach(UpdateService.Channel.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("settings.updates.channel")
+                }
+                SettingsRow(title: "Last checked") {
+                    Text(lastCheckedText)
+                        .font(.callout)
+                        .foregroundStyle(theme.secondaryText)
+                        .accessibilityIdentifier("settings.updates.lastChecked")
+                }
+                ThemedSeparator()
+                appRows
+                ThemedSeparator()
+                systemRows
+                SystemVersionDetailRows(service: service)
+                ThemedSeparator()
+                packageRows
+                Text(footnote)
+                    .font(.caption)
                     .foregroundStyle(theme.secondaryText)
-                    .accessibilityIdentifier("settings.updates.lastChecked")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
-            ThemedSeparator()
-            appRows
-            ThemedSeparator()
-            systemRows
-            SystemVersionDetailRows(service: service)
-            ThemedSeparator()
-            packageRows
-            Text(footnote)
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-                .textSelection(.enabled)
         }
     }
 
@@ -244,17 +247,19 @@ struct UpdatesSettingsSection: View {
         }
         if !service.packageLog.isEmpty {
             ScrollViewReader { proxy in
-                ScrollView {
-                    Text(service.packageLog.joined(separator: "\n"))
-                        .font(.caption2.monospaced())
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .textSelection(.enabled)
-                    Color.clear.frame(height: 1).id("end")
+                WithPerceptionTracking {
+                    ScrollView {
+                        Text(service.packageLog.joined(separator: "\n"))
+                            .font(.caption2.monospaced())
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                        Color.clear.frame(height: 1).id("end")
+                    }
+                    .frame(maxHeight: 160)
+                    .padding(8)
+                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.25)))
+                    .onChangeCompat(of: service.packageLog.count) { _, _ in proxy.scrollTo("end") }
                 }
-                .frame(maxHeight: 160)
-                .padding(8)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.25)))
-                .onChange(of: service.packageLog.count) { _, _ in proxy.scrollTo("end") }
             }
         }
     }
@@ -330,29 +335,31 @@ struct UpdateStatusRow: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        if let content {
-            Button {
-                service.showSettings?()
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: content.symbol)
-                        .foregroundStyle(theme.accent)
-                        .frame(width: 20)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(content.title).font(.system(size: 13, weight: .medium))
-                        if let fraction = content.fraction {
-                            ProgressView(value: fraction).tint(theme.accent)
+        WithPerceptionTracking {
+            if let content {
+                Button {
+                    service.showSettings?()
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: content.symbol)
+                            .foregroundStyle(theme.accent)
+                            .frame(width: 20)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text(content.title).font(.system(size: 13, weight: .medium))
+                            if let fraction = content.fraction {
+                                ProgressView(value: fraction).tint(theme.accent)
+                            }
                         }
+                        Spacer(minLength: 0)
                     }
-                    Spacer(minLength: 0)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+                        .fill(theme.primaryText.opacity(0.06)))
+                    .contentShape(Rectangle())
                 }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
-                    .fill(theme.primaryText.opacity(0.06)))
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("desktop.updateStatus")
             }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("desktop.updateStatus")
         }
     }
 

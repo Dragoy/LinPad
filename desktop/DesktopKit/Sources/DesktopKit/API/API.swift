@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 
@@ -116,7 +117,7 @@ public protocol LinuxSystemPreparing: AnyObject {
 }
 
 /// Progress of the host's preparation, observed by the boot splash.
-@Observable @MainActor
+@Perceptible @MainActor
 public final class LinuxSystemPreparation {
     public enum Phase: Equatable, Sendable {
         /// Unpacking a root filesystem; `fraction` and `detail` say how far.

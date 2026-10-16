@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 /// The lock screen: wallpaper, a large clock, and any tap or key press unlocks. There is no
@@ -7,39 +8,40 @@ struct LockScreen: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        ZStack {
-            WallpaperView(store: controller.wallpapers, source: controller.wallpaperSource(), variant: .blurred,
-                          accessibilityID: "desktop.lockScreen.wallpaper")
-            Color.black.opacity(0.35)
-            TimelineView(.everyMinute) { context in
-                VStack(spacing: 8) {
-                    Text(context.date.formatted(date: .omitted, time: .shortened))
-                        .font(.system(size: 96, weight: .thin).monospacedDigit())
-                    Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                        .font(.system(size: 22, weight: .regular))
-                    Spacer().frame(height: 60)
-                    Label("Tap or press any key to unlock", systemImage: "lock.open")
-                        .font(.system(size: 15, weight: .medium))
-                        .opacity(0.8)
+        WithPerceptionTracking {
+            ZStack {
+                WallpaperView(store: controller.wallpapers, source: controller.wallpaperSource(), variant: .blurred,
+                              accessibilityID: "desktop.lockScreen.wallpaper")
+                Color.black.opacity(0.35)
+                TimelineView(.everyMinute) { context in
+                    VStack(spacing: 8) {
+                        Text(context.date.formatted(date: .omitted, time: .shortened))
+                            .font(.system(size: 96, weight: .thin).monospacedDigit())
+                        Text(context.date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                            .font(.system(size: 22, weight: .regular))
+                        Spacer().frame(height: 60)
+                        Label("Tap or press any key to unlock", systemImage: "lock.open")
+                            .font(.system(size: 15, weight: .medium))
+                            .opacity(0.8)
+                    }
+                    .foregroundStyle(.white)
                 }
-                .foregroundStyle(.white)
             }
+            .ignoresSafeArea()
+            .contentShape(Rectangle())
+            .onTapGesture { controller.unlockScreen() }
+            .focusableWithoutEffectCompat()
+            .focused($isFocused)
+            .anyKeyPressCompat(iOS16Active: true) {
+                controller.unlockScreen()
+                return true
+            }
+            .onAppear { isFocused = true }
+            .accessibilityElement(children: .combine)
+            .accessibilityAddTraits(.isButton)
+            .accessibilityLabel("Locked. Activate to unlock.")
+            .accessibilityIdentifier("desktop.lockScreen")
         }
-        .ignoresSafeArea()
-        .contentShape(Rectangle())
-        .onTapGesture { controller.unlockScreen() }
-        .focusable()
-        .focusEffectDisabled()
-        .focused($isFocused)
-        .onKeyPress { _ in
-            controller.unlockScreen()
-            return .handled
-        }
-        .onAppear { isFocused = true }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isButton)
-        .accessibilityLabel("Locked. Activate to unlock.")
-        .accessibilityIdentifier("desktop.lockScreen")
     }
 }
 
@@ -50,36 +52,38 @@ struct BootSplash: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        ZStack {
-            Color.black
-            VStack(spacing: 22) {
-                Text(BootSplash.logo)
-                    .font(.system(size: 18, weight: .bold, design: .monospaced))
-                    .foregroundStyle(.white)
-                    .multilineTextAlignment(.leading)
-                Text("Linux for iPad")
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundStyle(.white.opacity(0.7))
-                ProgressView(value: controller.boot.progress)
-                    .progressViewStyle(.linear)
-                    .tint(.white)
-                    .frame(width: 260)
-                    .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: controller.boot.progress)
-                Text(controller.boot.step)
-                    .font(.system(size: 13))
-                    .foregroundStyle(.white.opacity(0.6))
-                if let engine = controller.cpuEngine {
-                    Text("Performance: \(engine.title)")
-                        .font(.system(size: 12))
-                        .foregroundStyle(engine == .nativeJIT ? Color.green.opacity(0.8) : .white.opacity(0.45))
-                        .accessibilityIdentifier("desktop.bootSplash.engine")
+        WithPerceptionTracking {
+            ZStack {
+                Color.black
+                VStack(spacing: 22) {
+                    Text(BootSplash.logo)
+                        .font(.system(size: 18, weight: .bold, design: .monospaced))
+                        .foregroundStyle(.white)
+                        .multilineTextAlignment(.leading)
+                    Text("Linux for iPad")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.7))
+                    ProgressView(value: controller.boot.progress)
+                        .progressViewStyle(.linear)
+                        .tint(.white)
+                        .frame(width: 260)
+                        .animation(reduceMotion ? nil : .easeOut(duration: 0.3), value: controller.boot.progress)
+                    Text(controller.boot.step)
+                        .font(.system(size: 13))
+                        .foregroundStyle(.white.opacity(0.6))
+                    if let engine = controller.cpuEngine {
+                        Text("Performance: \(engine.title)")
+                            .font(.system(size: 12))
+                            .foregroundStyle(engine == .nativeJIT ? Color.green.opacity(0.8) : .white.opacity(0.45))
+                            .accessibilityIdentifier("desktop.bootSplash.engine")
+                    }
                 }
             }
+            .ignoresSafeArea()
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Starting Linux. \(controller.boot.step)")
+            .accessibilityIdentifier("desktop.bootSplash")
         }
-        .ignoresSafeArea()
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Starting Linux. \(controller.boot.step)")
-        .accessibilityIdentifier("desktop.bootSplash")
     }
 
     /// The same mark the guest prints (/usr/share/ish/logo.txt).
@@ -96,7 +100,7 @@ struct BootSplash: View {
 
 /// Boot progress, as far as the desktop can see it: the guest answering a shell command,
 /// then (with Linux GUI apps) the Wayland session coming up.
-@Observable @MainActor
+@Perceptible @MainActor
 final class BootProgress {
     private(set) var progress = 0.1
     private(set) var step = "Starting Linux…"

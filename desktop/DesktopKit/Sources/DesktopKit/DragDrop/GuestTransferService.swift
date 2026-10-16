@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 
 /// Moves files between iPadOS and the guest, always through the guest's own shell.
 ///
@@ -279,7 +279,7 @@ enum FileNaming {
 }
 
 /// Progress of a long file operation, shown in the Files status bar.
-@Observable @MainActor
+@Perceptible @MainActor
 final class TransferActivity {
     var title: String
     var completed: Int64 = 0

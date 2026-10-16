@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -34,19 +35,19 @@ struct FilesPlace: Identifiable, Hashable {
 }
 
 @MainActor
-@Observable
+@Perceptible
 final class FilesModel {
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let desktop: any DesktopActions
-    @ObservationIgnored private let window: any WindowHandle
-    @ObservationIgnored private var loadTask: Task<Void, Never>?
-    @ObservationIgnored private var didStart = false
-    @ObservationIgnored private var typeAhead = ""
-    @ObservationIgnored private var typeAheadTime = Date.distantPast
-    @ObservationIgnored private var selectionOrigin: String?
-    @ObservationIgnored let operations: FileOperations
-    @ObservationIgnored let trash: FileTrash
-    @ObservationIgnored let transfer: GuestTransferService
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let desktop: any DesktopActions
+    @PerceptionIgnored private let window: any WindowHandle
+    @PerceptionIgnored private var loadTask: Task<Void, Never>?
+    @PerceptionIgnored private var didStart = false
+    @PerceptionIgnored private var typeAhead = ""
+    @PerceptionIgnored private var typeAheadTime = Date.distantPast
+    @PerceptionIgnored private var selectionOrigin: String?
+    @PerceptionIgnored let operations: FileOperations
+    @PerceptionIgnored let trash: FileTrash
+    @PerceptionIgnored let transfer: GuestTransferService
 
     let homeDirectory: String
     let places: [FilesPlace]
@@ -822,73 +823,77 @@ struct FilesAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            if let message = model.errorMessage {
-                InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
-            }
-            HStack(spacing: 0) {
-                if showsSidebar {
-                    sidebar
-                    ThemedSeparator(vertical: true)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                if let message = model.errorMessage {
+                    InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
                 }
-                if showsPhotos {
-                    PhotosBrowserView(model: photos, host: model.linuxHost, desktop: model.desktopActions,
-                                      isFocused: isWindowFocused)
-                } else {
-                    content
+                HStack(spacing: 0) {
+                    if showsSidebar {
+                        sidebar
+                        ThemedSeparator(vertical: true)
+                    }
+                    if showsPhotos {
+                        PhotosBrowserView(model: photos, host: model.linuxHost, desktop: model.desktopActions,
+                                          isFocused: isWindowFocused)
+                    } else {
+                        content
+                    }
+                }
+                statusBar
+            }
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .background {
+                KeyCommandHost(isActive: takesKeys, focusToken: keyFocusToken, onKey: handle(_:),
+                               onType: model.typeToSelect)
+                    .frame(width: 1, height: 1)
+                    .accessibilityHidden(true)
+            }
+            .animation(.easeOut(duration: 0.18), value: model.errorMessage)
+            .task { model.startIfNeeded() }
+            .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in model.reload() }
+            .onChangeCompat(of: model.path) { _, _ in showsPhotos = false }
+            .onReceive(NotificationCenter.default.publisher(for: .quickLookDidClose)) { _ in keyFocusToken += 1 }
+            .onChangeCompat(of: isWindowFocused) { _, focused in if focused { model.reload() } }
+            .nativeDropTarget(window: model.windowID) { items, operation in
+                model.receive(items, into: model.path, operation: operation)
+            }
+            .alert(prompt?.title ?? "", isPresented: isPromptPresented) {
+                TextField("Name", text: $promptText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Cancel", role: .cancel) { keyFocusToken += 1 }
+                Button(prompt?.actionTitle ?? "OK") {
+                    if let prompt { commit(prompt) }
+                    keyFocusToken += 1
                 }
             }
-            statusBar
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .background {
-            KeyCommandHost(isActive: takesKeys, focusToken: keyFocusToken, onKey: handle(_:),
-                           onType: model.typeToSelect)
-                .frame(width: 1, height: 1)
-                .accessibilityHidden(true)
-        }
-        .animation(.easeOut(duration: 0.18), value: model.errorMessage)
-        .task { model.startIfNeeded() }
-        .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in model.reload() }
-        .onChange(of: model.path) { _, _ in showsPhotos = false }
-        .onReceive(NotificationCenter.default.publisher(for: .quickLookDidClose)) { _ in keyFocusToken += 1 }
-        .onChange(of: isWindowFocused) { _, focused in if focused { model.reload() } }
-        .nativeDropTarget(window: model.windowID) { items, operation in
-            model.receive(items, into: model.path, operation: operation)
-        }
-        .alert(prompt?.title ?? "", isPresented: isPromptPresented) {
-            TextField("Name", text: $promptText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Cancel", role: .cancel) { keyFocusToken += 1 }
-            Button(prompt?.actionTitle ?? "OK") {
-                if let prompt { commit(prompt) }
-                keyFocusToken += 1
+            .alert(deletionTitle, isPresented: isDeletionPresented) {
+                Button("Delete", role: .destructive) {
+                    model.deletePermanently(pendingDeletion)
+                    keyFocusToken += 1
+                }
+                Button("Cancel", role: .cancel) { keyFocusToken += 1 }
+            } message: {
+                Text("This can't be undone. The item\(pendingDeletion.count == 1 ? "" : "s") will be deleted immediately.")
             }
-        }
-        .alert(deletionTitle, isPresented: isDeletionPresented) {
-            Button("Delete", role: .destructive) {
-                model.deletePermanently(pendingDeletion)
-                keyFocusToken += 1
+            .alert("Empty Trash?", isPresented: $confirmsEmptyTrash) {
+                Button("Empty Trash", role: .destructive) { model.emptyTrash() }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("All items in the Trash will be permanently deleted.")
             }
-            Button("Cancel", role: .cancel) { keyFocusToken += 1 }
-        } message: {
-            Text("This can't be undone. The item\(pendingDeletion.count == 1 ? "" : "s") will be deleted immediately.")
-        }
-        .alert("Empty Trash?", isPresented: $confirmsEmptyTrash) {
-            Button("Empty Trash", role: .destructive) { model.emptyTrash() }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("All items in the Trash will be permanently deleted.")
-        }
-        .sheet(item: $propertiesTarget, onDismiss: {
-            model.reload()
-            keyFocusToken += 1
-        }) { target in
-            FilePropertiesSheet(path: target.path, operations: model.operations) { propertiesTarget = nil }
-                .environment(\.desktopTheme, theme)
+            .sheet(item: $propertiesTarget, onDismiss: {
+                model.reload()
+                keyFocusToken += 1
+            }) { target in
+                WithPerceptionTracking {
+                    FilePropertiesSheet(path: target.path, operations: model.operations) { propertiesTarget = nil }
+                        .environment(\.desktopTheme, theme)
+                }
+            }
         }
     }
 
@@ -971,23 +976,25 @@ struct FilesAppView: View {
                         model.navigate(to: pathDraft)
                         isEditingPath = false
                     }
-                    .onChange(of: pathFieldFocused) { _, focused in
+                    .onChangeCompat(of: pathFieldFocused) { _, focused in
                         if !focused { isEditingPath = false }
                     }
                     .padding(.horizontal, 8)
             } else {
                 ScrollViewReader { proxy in
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 1) {
-                            ForEach(AppPath.components(model.path)) { component in
-                                breadcrumb(component)
-                                    .id(component.path)
+                    WithPerceptionTracking {
+                        ScrollView(.horizontal, showsIndicators: false) {
+                            HStack(spacing: 1) {
+                                ForEach(AppPath.components(model.path)) { component in
+                                    breadcrumb(component)
+                                        .id(component.path)
+                                }
                             }
+                            .padding(.horizontal, 3)
                         }
-                        .padding(.horizontal, 3)
+                        .onAppear { proxy.scrollTo(model.path, anchor: .trailing) }
+                        .onChangeCompat(of: model.path) { _, newPath in proxy.scrollTo(newPath, anchor: .trailing) }
                     }
-                    .onAppear { proxy.scrollTo(model.path, anchor: .trailing) }
-                    .onChange(of: model.path) { _, newPath in proxy.scrollTo(newPath, anchor: .trailing) }
                 }
                 .contentShape(Rectangle())
                 .onTapGesture(count: 2) { beginEditingPath() }
@@ -1063,24 +1070,24 @@ struct FilesAppView: View {
     @ViewBuilder
     private var sortAndViewItems: some View {
         Menu {
-            Picker("Sort By", selection: $model.sortKey) {
+            Picker("Sort By", selection: model.binding(\.sortKey)) {
                 ForEach(FilesSortKey.allCases) { key in
                     Text(key.rawValue).tag(key)
                 }
             }
-            Toggle("Ascending", isOn: $model.ascending)
+            Toggle("Ascending", isOn: model.binding(\.ascending))
         } label: {
             Label("Sort By", systemImage: "arrow.up.arrow.down")
         }
         Menu {
-            Picker("View", selection: $model.viewMode) {
+            Picker("View", selection: model.binding(\.viewMode)) {
                 ThemedLabel("Icons", systemImage: "square.grid.2x2").tag(FilesViewMode.grid)
                 ThemedLabel("List", systemImage: "list.bullet").tag(FilesViewMode.list)
             }
         } label: {
             Label("View", systemImage: "rectangle.grid.1x2")
         }
-        Toggle(isOn: $model.showHidden) {
+        Toggle(isOn: model.binding(\.showHidden)) {
             Label("Show Hidden Files", systemImage: "eye")
         }
     }
@@ -1096,13 +1103,17 @@ struct FilesAppView: View {
                 .padding(.top, 10)
                 .padding(.bottom, 4)
             ForEach(model.places) { place in
-                placeRow(place)
+                WithPerceptionTracking {
+                    placeRow(place)
+                }
             }
             sectionTitle("IPAD")
             photosRow
             let mounted = model.mountedIPadPoints
             ForEach(IPadPlaceStore.shared.places) { place in
-                iPadRow(place, available: mounted.contains(place.mountPoint))
+                WithPerceptionTracking {
+                    iPadRow(place, available: mounted.contains(place.mountPoint))
+                }
             }
             if model.canMountIPadFolders {
                 Button { model.addIPadFolder() } label: {
@@ -1312,7 +1323,9 @@ struct FilesAppView: View {
             LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                 Section {
                     ForEach(Array(items.enumerated()), id: \.element.id) { index, entry in
-                        listRow(entry, striped: index.isMultiple(of: 2))
+                        WithPerceptionTracking {
+                            listRow(entry, striped: index.isMultiple(of: 2))
+                        }
                     }
                 } header: {
                     listHeader
@@ -1415,13 +1428,15 @@ struct FilesAppView: View {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 96, maximum: 120), spacing: 8)], spacing: 10) {
                     ForEach(items) { entry in
-                        gridCell(entry)
+                        WithPerceptionTracking {
+                            gridCell(entry)
+                        }
                     }
                 }
                 .padding(12)
             }
             .onAppear { model.gridColumns = Self.columns(for: proxy.size.width) }
-            .onChange(of: proxy.size.width) { _, width in model.gridColumns = Self.columns(for: width) }
+            .onChangeCompat(of: proxy.size.width) { _, width in model.gridColumns = Self.columns(for: width) }
         }
     }
 
@@ -1694,21 +1709,23 @@ struct EntryInteractions<MenuContent: View>: ViewModifier {
     let menu: () -> MenuContent
 
     func body(content: Content) -> some View {
-        content
-            .onTapGesture(count: 2) { model.open(entry) }
-            .simultaneousGesture(TapGesture().onEnded {
-                model.click(entry)
-                focus()
-            })
-            .hoverEffect(.highlight)
-            .onDrag { model.dragProvider(for: entry) }
-            .modifier(OptionalDrop(delegate: dropDelegate))
-            .contextMenu { menu() }
-            // Taps are gestures, not Buttons: one element per item, read as a button.
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(model.selection.contains(entry.path) ? [.isButton, .isSelected] : .isButton)
-            .accessibilityAction { model.open(entry) }
-            .accessibilityIdentifier("files.entry.\(entry.name)")
+        WithPerceptionTracking {
+            content
+                .onTapGesture(count: 2) { model.open(entry) }
+                .simultaneousGesture(TapGesture().onEnded {
+                    model.click(entry)
+                    focus()
+                })
+                .hoverEffect(.highlight)
+                .onDrag { model.dragProvider(for: entry) }
+                .modifier(OptionalDrop(delegate: dropDelegate))
+                .contextMenu { menu() }
+                // Taps are gestures, not Buttons: one element per item, read as a button.
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(model.selection.contains(entry.path) ? [.isButton, .isSelected] : .isButton)
+                .accessibilityAction { model.open(entry) }
+                .accessibilityIdentifier("files.entry.\(entry.name)")
+        }
     }
 }
 
@@ -1739,16 +1756,18 @@ struct FileIconView: View {
     @Environment(\.desktopIcons) private var icons
 
     var body: some View {
-        if let image = icons?.icon(FileTypeIcons.iconNames(for: entry, home: home))?.image {
-            Image(uiImage: image)
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: size * 1.3, height: size * 1.3)
-        } else {
-            Image(systemName: FileIcon.symbol(for: entry))
-                .font(.system(size: size))
-                .foregroundStyle(FileIcon.tint(for: entry, theme: theme))
+        WithPerceptionTracking {
+            if let image = icons?.icon(FileTypeIcons.iconNames(for: entry, home: home))?.image {
+                Image(uiImage: image)
+                    .resizable()
+                    .interpolation(.high)
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: size * 1.3, height: size * 1.3)
+            } else {
+                Image(systemName: FileIcon.symbol(for: entry))
+                    .font(.system(size: size))
+                    .foregroundStyle(FileIcon.tint(for: entry, theme: theme))
+            }
         }
     }
 }

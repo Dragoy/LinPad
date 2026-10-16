@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 /// UserDefaults keys (via @AppStorage) the Settings app writes and the shell may read.
@@ -79,7 +80,7 @@ enum SettingsApp {
 // MARK: - About model
 
 @MainActor
-@Observable
+@Perceptible
 final class SystemAboutModel {
     private static let separator = "__DK_SECTION__"
     private static let command = """
@@ -92,7 +93,7 @@ final class SystemAboutModel {
         npm -v 2>/dev/null
         """
 
-    @ObservationIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let host: any LinuxHost
     let hostName: String
     private(set) var kernel: String?
     private(set) var alpineRelease: String?
@@ -167,57 +168,61 @@ struct SettingsAppView: View {
     }
 
     var body: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
-                    if let fastMode { FastModeSettingsSection(fastMode: fastMode) }
-                    appearanceSection
-                    StoreSettingsSection(store: StoreModel.shared(for: host), desktop: desktop)
-                        .id(SettingsApp.appsPage)
-                    if let icons {
-                        IconPackSettingsSection(store: icons.packs, icons: icons, host: host, desktop: desktop)
-                            .id(SettingsApp.iconsPage)
+        WithPerceptionTracking {
+            ScrollViewReader { proxy in
+                WithPerceptionTracking {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 22) {
+                            if let fastMode { FastModeSettingsSection(fastMode: fastMode) }
+                            appearanceSection
+                            StoreSettingsSection(store: StoreModel.shared(for: host), desktop: desktop)
+                                .id(SettingsApp.appsPage)
+                            if let icons {
+                                IconPackSettingsSection(store: icons.packs, icons: icons, host: host, desktop: desktop)
+                                    .id(SettingsApp.iconsPage)
+                            }
+                            if let wallpapers {
+                                WallpaperSettingsSection(store: wallpapers, host: host)
+                                    .id(SettingsApp.wallpaperPage)
+                                if let desktopController { WallpaperAutoMatchToggle(model: desktopController.wallpaperMatch).padding(.horizontal, 4) }
+                            }
+                            desktopSection
+                            PerformanceSettingsSection(host: host)
+                                .id(SettingsApp.performancePage)
+                            MemorySettingsSection(host: host)
+                            IdleSettingsSection(controller: desktopController)
+                                .id(SettingsApp.idlePage)
+                            LifecycleSettingsSection(controller: desktopController, host: host)
+                                .id(SettingsApp.backgroundPage)
+                            tilingSection
+                            shortcutsSection
+                                .id(SettingsApp.shortcutsPage)
+                            UpdatesSettingsSection(service: UpdateService.shared(for: host))
+                                .id(SettingsApp.updatesPage)
+                            MaintenanceSettingsSection(service: SystemMaintenanceService.shared(for: host))
+                                .id(SettingsApp.maintenancePage)
+                            aboutSection
+                        }
+                        .padding(20)
+                        .frame(maxWidth: 640, alignment: .leading)
+                        .frame(maxWidth: .infinity)
                     }
-                    if let wallpapers {
-                        WallpaperSettingsSection(store: wallpapers, host: host)
-                            .id(SettingsApp.wallpaperPage)
-                        if let desktopController { WallpaperAutoMatchToggle(model: desktopController.wallpaperMatch).padding(.horizontal, 4) }
+                    .onAppear {
+                        if let initialPage { Task { proxy.scrollTo(initialPage, anchor: .top) } }
                     }
-                    desktopSection
-                    PerformanceSettingsSection(host: host)
-                        .id(SettingsApp.performancePage)
-                    MemorySettingsSection(host: host)
-                    IdleSettingsSection(controller: desktopController)
-                        .id(SettingsApp.idlePage)
-                    LifecycleSettingsSection(controller: desktopController, host: host)
-                        .id(SettingsApp.backgroundPage)
-                    tilingSection
-                    shortcutsSection
-                        .id(SettingsApp.shortcutsPage)
-                    UpdatesSettingsSection(service: UpdateService.shared(for: host))
-                        .id(SettingsApp.updatesPage)
-                    MaintenanceSettingsSection(service: SystemMaintenanceService.shared(for: host))
-                        .id(SettingsApp.maintenancePage)
-                    aboutSection
+                    .onChangeCompat(of: wallpapers?.pageRequest) { _, page in
+                        guard let page else { return }
+                        withAnimation { proxy.scrollTo(page, anchor: .top) }
+                        wallpapers?.pageRequest = nil
+                    }
                 }
-                .padding(20)
-                .frame(maxWidth: 640, alignment: .leading)
-                .frame(maxWidth: .infinity)
             }
-            .onAppear {
-                if let initialPage { Task { proxy.scrollTo(initialPage, anchor: .top) } }
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .onAppear { window.setTitle("Settings") }
+            .task {
+                if !about.hasLoaded { await about.refresh() }
             }
-            .onChange(of: wallpapers?.pageRequest) { _, page in
-                guard let page else { return }
-                withAnimation { proxy.scrollTo(page, anchor: .top) }
-                wallpapers?.pageRequest = nil
-            }
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .onAppear { window.setTitle("Settings") }
-        .task {
-            if !about.hasLoaded { await about.refresh() }
         }
     }
 
@@ -260,8 +265,8 @@ struct SettingsAppView: View {
     @ViewBuilder
     private func colorThemeRows(_ store: ColorThemeStore) -> some View {
         SettingsRow(title: "Color theme") {
-            Picker("Color theme", selection: Binding(get: { store.currentID }, set: { store.onApplyRequest?($0) })) {
-                ForEach(store.orderedIDs, id: \.self) { id in Text(store.name(of: id)).tag(id) }
+            Picker("Color theme", selection: Binding(tracking: { store.currentID }, set: { store.onApplyRequest?($0) })) {
+                ForEach(store.orderedIDs, id: \.self) { id in WithPerceptionTracking { Text(store.name(of: id)).tag(id) } }
             }
             .labelsHidden()
             .accessibilityIdentifier("settings.colorTheme")
@@ -559,64 +564,66 @@ struct SettingsAppView: View {
 
 /// Fast mode: the setting, what happened at this launch, a retry and the setup steps.
 private struct FastModeSettingsSection: View {
-    @Bindable var fastMode: FastModeModel
+    @Perception.Bindable var fastMode: FastModeModel
     @Environment(\.desktopTheme) private var theme
     @State private var showsHelp = false
     @State private var showsSetup = false
 
     var body: some View {
-        SettingsSection(title: "Fast Mode", symbol: "bolt") {
-            SettingsRow(title: "Fast mode") {
-                Picker("Fast mode", selection: $fastMode.setting) {
-                    ForEach(FastModeModel.Setting.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.menu)
-                .fixedSize()
-                .accessibilityIdentifier("settings.fastMode")
-            }
-            SettingsRow(title: "Code cache") {
-                Picker("Code cache", selection: $fastMode.codeCacheMB) {
-                    ForEach(FastModeModel.codeCacheChoices, id: \.self) { mb in
-                        Text(mb == 0 ? "Automatic" : "\(mb) MB").tag(mb)
+        WithPerceptionTracking {
+            SettingsSection(title: "Fast Mode", symbol: "bolt") {
+                SettingsRow(title: "Fast mode") {
+                    Picker("Fast mode", selection: fastMode.binding(\.setting)) {
+                        ForEach(FastModeModel.Setting.allCases) { Text($0.title).tag($0) }
                     }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("settings.fastMode")
                 }
-                .pickerStyle(.menu)
-                .fixedSize()
-                .accessibilityIdentifier("settings.fastModeCodeCache")
-            }
-            SettingsRow(title: "Status") {
-                // A green mark carries the state; green text read at under 2:1 on light themes.
-                Label {
-                    Text(fastMode.statusText)
-                } icon: {
-                    if fastModeIsOn { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green) }
+                SettingsRow(title: "Code cache") {
+                    Picker("Code cache", selection: fastMode.binding(\.codeCacheMB)) {
+                        ForEach(FastModeModel.codeCacheChoices, id: \.self) { mb in
+                            Text(mb == 0 ? "Automatic" : "\(mb) MB").tag(mb)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .fixedSize()
+                    .accessibilityIdentifier("settings.fastModeCodeCache")
                 }
-                    .font(.callout)
-                    .foregroundStyle(fastModeIsOn ? theme.primaryText : theme.secondaryText)
-                    .multilineTextAlignment(.trailing)
+                SettingsRow(title: "Status") {
+                    // A green mark carries the state; green text read at under 2:1 on light themes.
+                    Label {
+                        Text(fastMode.statusText)
+                    } icon: {
+                        if fastModeIsOn { Image(systemName: "checkmark.circle.fill").foregroundStyle(Color.green) }
+                    }
+                        .font(.callout)
+                        .foregroundStyle(fastModeIsOn ? theme.primaryText : theme.secondaryText)
+                        .multilineTextAlignment(.trailing)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("settings.fastModeStatus")
+                }
+                HStack {
+                    Button(fastMode.status == .enabling ? "Enabling…" : "Retry fast mode") { fastMode.retry() }
+                        .disabled(!fastMode.canRetry)
+                        .accessibilityIdentifier("settings.fastModeRetry")
+                    Spacer()
+                    Button(showsHelp ? "Hide setup" : "How to set up") { showsHelp.toggle() }
+                    Button("Set Up…") { showsSetup = true }
+                        .accessibilityIdentifier("settings.fastModeSetup")
+                }
+                .sheet(isPresented: $showsSetup) { FastModeSetupSheet(fastMode: fastMode) }
+                .buttonStyle(.bordered)
+                .tint(theme.accent)
+                .controlSize(.small)
+                Text("Automatic asks StikDebug for the native JIT each time the app starts, before Linux boots. It needs StikDebug and LocalDevVPN installed, connected and paired with this iPad. The code cache holds translated programs; Firefox wants 256 MB or more, and a larger cache uses more memory. It applies at the next launch.")
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("settings.fastModeStatus")
-            }
-            HStack {
-                Button(fastMode.status == .enabling ? "Enabling…" : "Retry fast mode") { fastMode.retry() }
-                    .disabled(!fastMode.canRetry)
-                    .accessibilityIdentifier("settings.fastModeRetry")
-                Spacer()
-                Button(showsHelp ? "Hide setup" : "How to set up") { showsHelp.toggle() }
-                Button("Set Up…") { showsSetup = true }
-                    .accessibilityIdentifier("settings.fastModeSetup")
-            }
-            .sheet(isPresented: $showsSetup) { FastModeSetupSheet(fastMode: fastMode) }
-            .buttonStyle(.bordered)
-            .tint(theme.accent)
-            .controlSize(.small)
-            Text("Automatic asks StikDebug for the native JIT each time the app starts, before Linux boots. It needs StikDebug and LocalDevVPN installed, connected and paired with this iPad. The code cache holds translated programs; Firefox wants 256 MB or more, and a larger cache uses more memory. It applies at the next launch.")
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            if showsHelp {
-                FastModeHelpText()
-                    .font(.callout)
+                if showsHelp {
+                    FastModeHelpText()
+                        .font(.callout)
+                }
             }
         }
     }
@@ -645,24 +652,26 @@ struct SettingsSection<Trailing: View, Content: View>: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                ThemedLabel(title, systemImage: symbol, points: 20)
-                    .font(.headline)
-                Spacer()
-                trailing()
-            }
-            .padding(.horizontal, 4)
-            VStack(alignment: .leading, spacing: 10) {
-                content()
-            }
-            .padding(14)
-            .background {
-                if let skin = style.spec.skin {
-                    EraGroupBox(skin: skin)
-                } else {
-                    RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous).fill(theme.titleBarInactive)
-                    RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous).stroke(theme.separator, lineWidth: 1)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    ThemedLabel(title, systemImage: symbol, points: 20)
+                        .font(.headline)
+                    Spacer()
+                    trailing()
+                }
+                .padding(.horizontal, 4)
+                VStack(alignment: .leading, spacing: 10) {
+                    content()
+                }
+                .padding(14)
+                .background {
+                    if let skin = style.spec.skin {
+                        EraGroupBox(skin: skin)
+                    } else {
+                        RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous).fill(theme.titleBarInactive)
+                        RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous).stroke(theme.separator, lineWidth: 1)
+                    }
                 }
             }
         }
@@ -674,13 +683,15 @@ struct SettingsRow<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
-            Text(title)
-                .font(.callout)
-            Spacer(minLength: 12)
-            content()
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                Text(title)
+                    .font(.callout)
+                Spacer(minLength: 12)
+                content()
+            }
+            .frame(minHeight: 28)
         }
-        .frame(minHeight: 28)
     }
 }
 

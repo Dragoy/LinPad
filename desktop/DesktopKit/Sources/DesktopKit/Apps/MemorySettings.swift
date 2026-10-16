@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// What the emulator's out-of-memory monitor reports in /proc/ish/memory (kernel/oom.c):
 /// LinPad's footprint against the allowance iPadOS gives it, the policy, recent closes and
@@ -141,49 +142,51 @@ struct MemorySettingsSection: View {
     @FocusState private var protectFocused: Bool
 
     var body: some View {
-        SettingsSection(title: "Memory", symbol: "memorychip") {
-            usage
-            SettingsRow(title: "Close apps when memory runs out") {
-                Toggle("Close apps when memory runs out", isOn: $closesApps)
-                    .labelsHidden()
-                    .tint(theme.accent)
-                    .accessibilityIdentifier("settings.memory.closeApps")
+        WithPerceptionTracking {
+            SettingsSection(title: "Memory", symbol: "memorychip") {
+                usage
+                SettingsRow(title: "Close apps when memory runs out") {
+                    Toggle("Close apps when memory runs out", isOn: $closesApps)
+                        .labelsHidden()
+                        .tint(theme.accent)
+                        .accessibilityIdentifier("settings.memory.closeApps")
+                }
+                Text("Like a Linux out-of-memory killer: when LinPad nears the memory iPadOS allows it, the app using the most memory is closed (a Firefox tab before Firefox itself) and a notification says which. Off, iPadOS closes all of LinPad instead.")
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                SettingsRow(title: "Never close") {
+                    TextField("e.g. code, firefox-esr", text: $protectDraft)
+                        .textFieldStyle(.plain)
+                        .font(.callout)
+                        .autocorrectionDisabled()
+                        .textInputAutocapitalization(.never)
+                        .padding(.horizontal, 8).padding(.vertical, 5)
+                        .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(theme.primaryText.opacity(0.06)))
+                        .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.separator))
+                        .frame(maxWidth: 260)
+                        .focused($protectFocused)
+                        .onSubmit { saveProtectList() }
+                        .onChangeCompat(of: protectFocused) { _, focused in
+                            if !focused, protectDraft != protectedApps { saveProtectList() }
+                        }
+                        .accessibilityIdentifier("settings.memory.protect")
+                }
+                if !status.processes.isEmpty { processList }
+                if !status.closes.isEmpty { closeList }
             }
-            Text("Like a Linux out-of-memory killer: when LinPad nears the memory iPadOS allows it, the app using the most memory is closed (a Firefox tab before Firefox itself) and a notification says which. Off, iPadOS closes all of LinPad instead.")
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            SettingsRow(title: "Never close") {
-                TextField("e.g. code, firefox-esr", text: $protectDraft)
-                    .textFieldStyle(.plain)
-                    .font(.callout)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .padding(.horizontal, 8).padding(.vertical, 5)
-                    .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(theme.primaryText.opacity(0.06)))
-                    .overlay(RoundedRectangle(cornerRadius: 6, style: .continuous).strokeBorder(theme.separator))
-                    .frame(maxWidth: 260)
-                    .focused($protectFocused)
-                    .onSubmit { saveProtectList() }
-                    .onChange(of: protectFocused) { _, focused in
-                        if !focused, protectDraft != protectedApps { saveProtectList() }
-                    }
-                    .accessibilityIdentifier("settings.memory.protect")
+            .task {
+                protectDraft = protectedApps
+                loaded = true
+                while !Task.isCancelled {
+                    await refresh()
+                    try? await Task.sleep(for: .seconds(2))
+                }
             }
-            if !status.processes.isEmpty { processList }
-            if !status.closes.isEmpty { closeList }
-        }
-        .task {
-            protectDraft = protectedApps
-            loaded = true
-            while !Task.isCancelled {
-                await refresh()
-                try? await Task.sleep(for: .seconds(2))
+            .onChangeCompat(of: closesApps) { _, on in
+                guard loaded else { return }
+                Task { await writePolicy(MemorySettings.policy(enabled: on)) }
             }
-        }
-        .onChange(of: closesApps) { _, on in
-            guard loaded else { return }
-            Task { await writePolicy(MemorySettings.policy(enabled: on)) }
         }
     }
 

@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// First run, and Settings › About › Replay Welcome: a cinematic intro while Linux unpacks,
@@ -15,53 +16,57 @@ struct OnboardingView: View {
     private var catalog: AppCatalogModel { AppCatalogModel.shared(for: controller.host) }
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack {
-                // Nothing under onboarding takes a touch: taps on empty areas stop here.
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {}
-                    .accessibilityHidden(true)
-                if flow.step == .intro {
-                    OnboardingBackdrop(accent: theme.accent)
-                        .transition(.opacity)
-                    intro
-                        .transition(.opacity)
-                } else {
-                    Color.black.opacity(0.38)
-                        .ignoresSafeArea()
-                        .transition(.opacity)
-                    panel(in: proxy.size)
-                        .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                WithPerceptionTracking {
+                    ZStack {
+                        // Nothing under onboarding takes a touch: taps on empty areas stop here.
+                        Color.clear
+                            .contentShape(Rectangle())
+                            .onTapGesture {}
+                            .accessibilityHidden(true)
+                        if flow.step == .intro {
+                            OnboardingBackdrop(accent: theme.accent)
+                                .transition(.opacity)
+                            intro
+                                .transition(.opacity)
+                        } else {
+                            Color.black.opacity(0.38)
+                                .ignoresSafeArea()
+                                .transition(.opacity)
+                            panel(in: proxy.size)
+                                .transition(reduceMotion ? .opacity : .opacity.combined(with: .scale(scale: 0.98)))
+                        }
+                    }
+                    .frame(width: proxy.size.width, height: proxy.size.height)
+                    .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.45), value: flow.step == .intro)
                 }
             }
-            .frame(width: proxy.size.width, height: proxy.size.height)
-            .animation(reduceMotion ? .easeInOut(duration: 0.2) : .easeInOut(duration: 0.45), value: flow.step == .intro)
-        }
-        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
-        .background {
-            OnboardingKeyCatcher { key in
-                switch key {
-                case .left: _ = backward()
-                case .right: _ = forward()
-                case .enter: primaryAction()
+            .dynamicTypeSize(...DynamicTypeSize.accessibility2)
+            .background {
+                OnboardingKeyCatcher { key in
+                    switch key {
+                    case .left: _ = backward()
+                    case .right: _ = forward()
+                    case .enter: primaryAction()
+                    }
                 }
+                .accessibilityHidden(true)
             }
-            .accessibilityHidden(true)
+            .onAppear { controller.previewOnboardingChoices(flow.choices) }
+            .onDisappear {
+                // Hand the keyboard back to the desktop so its shortcuts work without a tap.
+                DispatchQueue.main.async { controller.input.ensureKeyCommandsReachable() }
+            }
+            .onChangeCompat(of: controller.isLauncherPresented) { _, presented in
+                // ⌃⌥A reaches the desktop's key commands; here it only lights up the cheat card.
+                guard presented else { return }
+                controller.isLauncherPresented = false
+                if flow.step == .keyboard { triedShortcut = true }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.onboarding")
         }
-        .onAppear { controller.previewOnboardingChoices(flow.choices) }
-        .onDisappear {
-            // Hand the keyboard back to the desktop so its shortcuts work without a tap.
-            DispatchQueue.main.async { controller.input.ensureKeyCommandsReachable() }
-        }
-        .onChange(of: controller.isLauncherPresented) { _, presented in
-            // ⌃⌥A reaches the desktop's key commands; here it only lights up the cheat card.
-            guard presented else { return }
-            controller.isLauncherPresented = false
-            if flow.step == .keyboard { triedShortcut = true }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.onboarding")
     }
 
     // MARK: Intro
@@ -140,9 +145,11 @@ struct OnboardingView: View {
         HStack(spacing: 14) {
             HStack(spacing: 5) {
                 ForEach(flow.steps) { step in
-                    Capsule()
-                        .fill(flow.steps.firstIndex(of: step)! <= flow.position ? theme.accent : theme.primaryText.opacity(0.14))
-                        .frame(width: step == flow.step ? 26 : 14, height: 5)
+                    WithPerceptionTracking {
+                        Capsule()
+                            .fill(flow.steps.firstIndex(of: step)! <= flow.position ? theme.accent : theme.primaryText.opacity(0.14))
+                            .frame(width: step == flow.step ? 26 : 14, height: 5)
+                    }
                 }
             }
             .animation(DesktopMotion.standard, value: flow.position)

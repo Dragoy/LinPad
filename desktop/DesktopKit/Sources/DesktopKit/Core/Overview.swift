@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UniformTypeIdentifiers
 
 /// Exposé: the current workspace's windows shrink into a grid (live, by transform only),
@@ -79,66 +80,70 @@ struct OverviewBackdrop: View {
     private var manager: WindowManager { controller.windowManager }
 
     var body: some View {
-        ZStack(alignment: .topLeading) {
-            Group {
-                if style == .ish || style == .windows || style == .kylin {
-                    theme.scrim
-                } else {
-                    Rectangle().fill(.ultraThinMaterial).overlay(Color.black.opacity(0.3))
-                }
-            }
-                .contentShape(Rectangle())
-                .onTapGesture { controller.setOverviewPresented(false) }
-                .accessibilityAddTraits(.isButton)
-                .accessibilityLabel("Close overview")
-                .accessibilityIdentifier("desktop.overview")
-            if style.spec.overviewSearches {
-                activitiesSearch
-            }
-            ForEach(Array(layout.workspaceFrames.enumerated()), id: \.offset) { index, frame in
-                WorkspaceThumbnail(controller: controller, index: index,
-                                   isDropTarget: controller.overviewDropHover == index || reorderHover == index)
-                    .frame(width: frame.width, height: frame.height)
-                    .onDrag { WorkspaceDrag.provider(for: index) }
-                    .onDrop(of: [.plainText], delegate: WorkspaceReorderDropDelegate(manager: manager, index: index,
-                                                                                     hovered: $reorderHover))
-                    .workspaceMenu(manager: manager, index: index)
-                    .offset(x: frame.minX, y: frame.minY)
-            }
-            if let frame = layout.addFrame {
-                Button { addAndSwitch(manager) } label: {
-                    VStack(spacing: 5) {
-                        RoundedRectangle(cornerRadius: 7, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
-                            .overlay { Image(systemName: "plus").font(.system(size: 22, weight: .medium)) }
-                        Text(style == .kylin ? "New Desktop" : "New Workspace")
-                            .font(.system(size: 11, weight: .medium))
+        WithPerceptionTracking {
+            ZStack(alignment: .topLeading) {
+                Group {
+                    if style == .ish || style == .windows || style == .kylin {
+                        theme.scrim
+                    } else {
+                        Rectangle().fill(.ultraThinMaterial).overlay(Color.black.opacity(0.3))
                     }
-                    .foregroundStyle(Color.white.opacity(0.8))
+                }
                     .contentShape(Rectangle())
+                    .onTapGesture { controller.setOverviewPresented(false) }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityLabel("Close overview")
+                    .accessibilityIdentifier("desktop.overview")
+                if style.spec.overviewSearches {
+                    activitiesSearch
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(.lift)
-                .frame(width: frame.width, height: frame.height)
-                .offset(x: frame.minX, y: frame.minY)
-                .accessibilityLabel(style == .kylin ? "New Desktop" : "New Workspace")
-                .accessibilityIdentifier("desktop.overview.addWorkspace")
-            }
-            if manager.windowsInCurrentWorkspace().allSatisfy(\.isMinimized) {
-                VStack(spacing: 6) {
-                    Text("No open windows on this workspace")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(Color.white.opacity(0.9))
-                    Text("Open an app from the launcher, or drag a window here from another workspace.")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color.white.opacity(0.7))
+                ForEach(Array(layout.workspaceFrames.enumerated()), id: \.offset) { index, frame in
+                    WithPerceptionTracking {
+                        WorkspaceThumbnail(controller: controller, index: index,
+                                           isDropTarget: controller.overviewDropHover == index || reorderHover == index)
+                            .frame(width: frame.width, height: frame.height)
+                            .onDrag { WorkspaceDrag.provider(for: index) }
+                            .onDrop(of: [.plainText], delegate: WorkspaceReorderDropDelegate(manager: manager, index: index,
+                                                                                             hovered: $reorderHover))
+                            .workspaceMenu(manager: manager, index: index)
+                            .offset(x: frame.minX, y: frame.minY)
+                    }
                 }
-                .multilineTextAlignment(.center)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .allowsHitTesting(false)
+                if let frame = layout.addFrame {
+                    Button { addAndSwitch(manager) } label: {
+                        VStack(spacing: 5) {
+                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                                .strokeBorder(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                                .overlay { Image(systemName: "plus").font(.system(size: 22, weight: .medium)) }
+                            Text(style == .kylin ? "New Desktop" : "New Workspace")
+                                .font(.system(size: 11, weight: .medium))
+                        }
+                        .foregroundStyle(Color.white.opacity(0.8))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.lift)
+                    .frame(width: frame.width, height: frame.height)
+                    .offset(x: frame.minX, y: frame.minY)
+                    .accessibilityLabel(style == .kylin ? "New Desktop" : "New Workspace")
+                    .accessibilityIdentifier("desktop.overview.addWorkspace")
+                }
+                if manager.windowsInCurrentWorkspace().allSatisfy(\.isMinimized) {
+                    VStack(spacing: 6) {
+                        Text("No open windows on this workspace")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundStyle(Color.white.opacity(0.9))
+                        Text("Open an app from the launcher, or drag a window here from another workspace.")
+                            .font(.system(size: 13))
+                            .foregroundStyle(Color.white.opacity(0.7))
+                    }
+                    .multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .allowsHitTesting(false)
+                }
             }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     /// GNOME's Activities search: typing hands over to the application grid with the query.
@@ -158,7 +163,7 @@ struct OverviewBackdrop: View {
         .background(theme.primaryText.opacity(0.12), in: Capsule())
         .frame(maxWidth: .infinity)
         .padding(.top, OverviewLayout.stripTop)
-        .onChange(of: query) { _, text in
+        .onChangeCompat(of: query) { _, text in
             guard !text.isEmpty else { return }
             controller.launcherInitialQuery = text
             query = ""
@@ -178,40 +183,44 @@ private struct WorkspaceThumbnail: View {
     private var manager: WindowManager { controller.windowManager }
 
     var body: some View {
-        let isCurrent = manager.currentWorkspace == index
-        Button {
-            withAnimation(DesktopMotion.standard) { manager.switchToWorkspace(index) }
-        } label: {
-            VStack(spacing: 5) {
-                GeometryReader { proxy in
-                    miniDesktop(in: proxy.size)
+        WithPerceptionTracking {
+            let isCurrent = manager.currentWorkspace == index
+            Button {
+                withAnimation(DesktopMotion.standard) { manager.switchToWorkspace(index) }
+            } label: {
+                VStack(spacing: 5) {
+                    GeometryReader { proxy in
+                        WithPerceptionTracking {
+                            miniDesktop(in: proxy.size)
+                        }
+                    }
+                    .background(WallpaperView(store: controller.wallpapers, source: controller.wallpaperSource(workspace: index),
+                                              accessibilityID: "desktop.overview.wallpaper").opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            .strokeBorder(isDropTarget || isCurrent ? theme.accent : theme.separator,
+                                          lineWidth: isDropTarget ? 3 : (isCurrent ? 2 : 1))
+                    }
+                    Text(manager.workspaceNames[index].isEmpty
+                         ? (style == .kylin ? "Desktop \(index + 1)" : "Workspace \(index + 1)")
+                         : manager.workspaceNames[index])
+                        .lineLimit(1)
+                        .font(.system(size: 11, weight: isCurrent ? .semibold : .medium))
+                        // The overview's backdrop is dark in every appearance.
+                        .foregroundStyle(Color.white.opacity(isCurrent ? 1 : 0.7))
                 }
-                .background(WallpaperView(store: controller.wallpapers, source: controller.wallpaperSource(workspace: index),
-                                          accessibilityID: "desktop.overview.wallpaper").opacity(0.9))
-                .clipShape(RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .overlay {
-                    RoundedRectangle(cornerRadius: 7, style: .continuous)
-                        .strokeBorder(isDropTarget || isCurrent ? theme.accent : theme.separator,
-                                      lineWidth: isDropTarget ? 3 : (isCurrent ? 2 : 1))
-                }
-                Text(manager.workspaceNames[index].isEmpty
-                     ? (style == .kylin ? "Desktop \(index + 1)" : "Workspace \(index + 1)")
-                     : manager.workspaceNames[index])
-                    .lineLimit(1)
-                    .font(.system(size: 11, weight: isCurrent ? .semibold : .medium))
-                    // The overview's backdrop is dark in every appearance.
-                    .foregroundStyle(Color.white.opacity(isCurrent ? 1 : 0.7))
+                .scaleEffect(isDropTarget ? 1.06 : 1)
+                .animation(DesktopMotion.quick, value: isDropTarget)
+                .contentShape(Rectangle())
             }
-            .scaleEffect(isDropTarget ? 1.06 : 1)
-            .animation(DesktopMotion.quick, value: isDropTarget)
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverEffect(.lift)
+            .accessibilityLabel(manager.title(ofWorkspace: index))
+            .accessibilityValue("\(manager.windows(inWorkspace: index).count) windows")
+            .accessibilityAddTraits(isCurrent ? .isSelected : [])
+            .accessibilityIdentifier("desktop.overview.workspace.\(index + 1)")
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.lift)
-        .accessibilityLabel(manager.title(ofWorkspace: index))
-        .accessibilityValue("\(manager.windows(inWorkspace: index).count) windows")
-        .accessibilityAddTraits(isCurrent ? .isSelected : [])
-        .accessibilityIdentifier("desktop.overview.workspace.\(index + 1)")
     }
 
     /// Each window as a rectangle at its real position, scaled to the thumbnail.
@@ -221,19 +230,21 @@ private struct WorkspaceThumbnail: View {
         let windows = manager.windows(inWorkspace: index).filter { !$0.isMinimized }.sorted { $0.zIndex < $1.zIndex }
         return ZStack(alignment: .topLeading) {
             ForEach(windows) { window in
-                let frame = manager.displayFrame(for: window)
-                RoundedRectangle(cornerRadius: 2, style: .continuous)
-                    .fill(theme.titleBarActive)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: 2, style: .continuous)
-                            .strokeBorder(theme.separator, lineWidth: 0.5)
-                    }
-                    .overlay {
-                        AppGlyph(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
-                                 symbol: window.symbol, size: 8, tint: theme.secondaryText)
-                    }
-                    .frame(width: max(frame.width * scale, 4), height: max(frame.height * scale, 3))
-                    .offset(x: frame.minX * scale, y: frame.minY * scale)
+                WithPerceptionTracking {
+                    let frame = manager.displayFrame(for: window)
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(theme.titleBarActive)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                .strokeBorder(theme.separator, lineWidth: 0.5)
+                        }
+                        .overlay {
+                            AppGlyph(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
+                                     symbol: window.symbol, size: 8, tint: theme.secondaryText)
+                        }
+                        .frame(width: max(frame.width * scale, 4), height: max(frame.height * scale, 3))
+                        .offset(x: frame.minX * scale, y: frame.minY * scale)
+                }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -109,7 +109,7 @@ enum WallpaperTarget: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// The wallpaper library, the settings, and the one decoded bitmap per visible wallpaper.
-@Observable @MainActor
+@Perceptible @MainActor
 final class WallpaperStore {
     static let settingsKey = "desktop.wallpaper"
     static let libraryKey = "desktop.wallpaperLibrary"
@@ -128,13 +128,13 @@ final class WallpaperStore {
     /// A Settings page an already open Settings window should scroll to.
     var pageRequest: String?
 
-    @ObservationIgnored let cache: WallpaperImageCache
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private var slideshowTask: Task<Void, Never>?
-    @ObservationIgnored private var loading: Set<String> = []
-    @ObservationIgnored var targetPixelSize: CGSize = CGSize(width: 2732, height: 2732)
+    @PerceptionIgnored let cache: WallpaperImageCache
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private var slideshowTask: Task<Void, Never>?
+    @PerceptionIgnored private var loading: Set<String> = []
+    @PerceptionIgnored var targetPixelSize: CGSize = CGSize(width: 2732, height: 2732)
     /// Reports a wallpaper change with a way to undo it (the desktop shows a toast).
-    @ObservationIgnored var onApplied: ((String, @escaping @MainActor () -> Void) -> Void)?
+    @PerceptionIgnored var onApplied: ((String, @escaping @MainActor () -> Void) -> Void)?
 
     init(defaults: UserDefaults = .standard, cache: WallpaperImageCache = WallpaperImageCache()) {
         self.defaults = defaults

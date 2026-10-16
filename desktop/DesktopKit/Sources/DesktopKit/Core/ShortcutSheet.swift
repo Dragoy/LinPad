@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// ⌘/ : every desktop shortcut, grouped, generated from the live binding table, so it
 /// always matches what the keys do (including the ⌃⌥ / ⌘ choice in Settings).
@@ -17,43 +18,45 @@ struct ShortcutSheetView: View {
     ]
 
     var body: some View {
-        let commands = DesktopCommand.all.filter { !Self.isFolded($0.id) }
-        ZStack {
-            theme.scrim
-                .ignoresSafeArea()
-                .contentShape(Rectangle())
-                .onTapGesture { controller.isShortcutSheetPresented = false }
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Keyboard Shortcuts").font(.system(size: 20, weight: .semibold))
-                    Spacer()
-                    Text(DesktopShortcutModifier.current == .command ? "General commands on ⌘" : "Desktop commands on ⌃⌥ · ⌘ stays with apps")
+        WithPerceptionTracking {
+            let commands = DesktopCommand.all.filter { !Self.isFolded($0.id) }
+            ZStack {
+                theme.scrim
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture { controller.isShortcutSheetPresented = false }
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("Keyboard Shortcuts").font(.system(size: 20, weight: .semibold))
+                        Spacer()
+                        Text(DesktopShortcutModifier.current == .command ? "General commands on ⌘" : "Desktop commands on ⌃⌥ · ⌘ stays with apps")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                    }
+                    ScrollView {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 22, alignment: .top),
+                                            GridItem(.flexible(), spacing: 22, alignment: .top),
+                                            GridItem(.flexible(), alignment: .top)],
+                                  alignment: .leading, spacing: 18) {
+                            ForEach(DesktopCommand.Group.allCases, id: \.self) { group in
+                                section(group.rawValue, commands.filter { $0.group == group }.map { (title(for: $0), label(for: $0)) })
+                            }
+                            section("In overlays and on the desktop", Self.contextual)
+                        }
+                    }
+                    Text("⌘/ or Esc closes · the ⌘K Command Menu lists every command too")
                         .font(.caption).foregroundStyle(theme.secondaryText)
                 }
-                ScrollView {
-                    LazyVGrid(columns: [GridItem(.flexible(), spacing: 22, alignment: .top),
-                                        GridItem(.flexible(), spacing: 22, alignment: .top),
-                                        GridItem(.flexible(), alignment: .top)],
-                              alignment: .leading, spacing: 18) {
-                        ForEach(DesktopCommand.Group.allCases, id: \.self) { group in
-                            section(group.rawValue, commands.filter { $0.group == group }.map { (title(for: $0), label(for: $0)) })
-                        }
-                        section("In overlays and on the desktop", Self.contextual)
-                    }
-                }
-                Text("⌘/ or Esc closes · the ⌘K Command Menu lists every command too")
-                    .font(.caption).foregroundStyle(theme.secondaryText)
+                .padding(24)
+                .frame(maxWidth: 1040, maxHeight: 640)
+                .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous).fill(theme.windowBackground))
+                .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
+                    .strokeBorder((theme.borderActive ?? theme.accent).opacity(0.35), lineWidth: 1))
+                .shadow(color: .black.opacity(0.35), radius: 30, y: 12)
+                .padding(30)
+                .accessibilityElement(children: .contain)
+                .accessibilityIdentifier("shortcutSheet")
             }
-            .padding(24)
-            .frame(maxWidth: 1040, maxHeight: 640)
-            .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous).fill(theme.windowBackground))
-            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 4, style: .continuous)
-                .strokeBorder((theme.borderActive ?? theme.accent).opacity(0.35), lineWidth: 1))
-            .shadow(color: .black.opacity(0.35), radius: 30, y: 12)
-            .padding(30)
-            .accessibilityElement(children: .contain)
-            .accessibilityIdentifier("shortcutSheet")
         }
     }
 

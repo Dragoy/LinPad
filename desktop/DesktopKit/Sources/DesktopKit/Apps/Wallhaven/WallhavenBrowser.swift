@@ -1,10 +1,10 @@
-import Observation
+import Perception
 import Photos
 import SwiftUI
 import UIKit
 
 /// Wallpapers saved for later, kept with their metadata so they show offline.
-@Observable @MainActor
+@Perceptible @MainActor
 final class WallhavenFavorites {
     static let storageKey = "wallhaven.favorites"
     private(set) var items: [Wallhaven.Wallpaper]
@@ -26,7 +26,7 @@ final class WallhavenFavorites {
     }
 }
 
-@Observable @MainActor
+@Perceptible @MainActor
 final class WallhavenBrowserModel {
     enum Mode: String, CaseIterable, Identifiable {
         case latest = "Latest"
@@ -51,8 +51,8 @@ final class WallhavenBrowserModel {
 
     let client: WallhavenClient
     let favorites = WallhavenFavorites()
-    @ObservationIgnored private var lastPage = 1
-    @ObservationIgnored private var loadTask: Task<Void, Never>?
+    @PerceptionIgnored private var lastPage = 1
+    @PerceptionIgnored private var loadTask: Task<Void, Never>?
 
     init(client: WallhavenClient) {
         self.client = client
@@ -194,32 +194,34 @@ struct RemoteImage: View {
     @State private var failed = false
 
     var body: some View {
-        ZStack {
-            Color.gray.opacity(0.15)
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            } else if failed {
-                Image(systemName: "wifi.slash").foregroundStyle(.secondary)
-            } else {
-                ProgressView()
+        WithPerceptionTracking {
+            ZStack {
+                Color.gray.opacity(0.15)
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else if failed {
+                    Image(systemName: "wifi.slash").foregroundStyle(.secondary)
+                } else {
+                    ProgressView()
+                }
             }
-        }
-        .task(id: url) {
-            do {
-                let (data, _) = try await session.data(from: url)
-                let maxPixel = maxPixel
-                image = await Task.detached(priority: .utility) { () -> UIImage? in
-                    guard let source = CGImageSourceCreateWithData(data as CFData, nil),
-                          let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
-                              kCGImageSourceCreateThumbnailFromImageAlways: true,
-                              kCGImageSourceThumbnailMaxPixelSize: maxPixel,
-                              kCGImageSourceCreateThumbnailWithTransform: true,
-                          ] as CFDictionary) else { return nil }
-                    return UIImage(cgImage: cg)
-                }.value
-                failed = image == nil
-            } catch {
-                failed = true
+            .task(id: url) {
+                do {
+                    let (data, _) = try await session.data(from: url)
+                    let maxPixel = maxPixel
+                    image = await Task.detached(priority: .utility) { () -> UIImage? in
+                        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                              let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                                  kCGImageSourceCreateThumbnailFromImageAlways: true,
+                                  kCGImageSourceThumbnailMaxPixelSize: maxPixel,
+                                  kCGImageSourceCreateThumbnailWithTransform: true,
+                              ] as CFDictionary) else { return nil }
+                        return UIImage(cgImage: cg)
+                    }.value
+                    failed = image == nil
+                } catch {
+                    failed = true
+                }
             }
         }
     }
@@ -230,6 +232,7 @@ struct WallpapersAppView: View {
     @State private var model = WallhavenBrowserModel(client: WallhavenBrowserModel.makeClient())
     @Environment(\.desktopTheme) private var theme
     @Environment(\.desktopWallpapers) private var wallpapers
+    @Environment(\.desktopWindowIsFocused) private var isWindowFocused
     @FocusState private var gridFocused: Bool
     @FocusState private var searchFocused: Bool
     @State private var columns = 4
@@ -243,63 +246,65 @@ struct WallpapersAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            theme.separator.frame(height: 1)
-            content
-            if let status = model.status {
-                Text(status).font(.caption).foregroundStyle(theme.secondaryText)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal, 12).padding(.vertical, 6)
-                    .accessibilityIdentifier("wallhaven.status")
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                theme.separator.frame(height: 1)
+                content
+                if let status = model.status {
+                    Text(status).font(.caption).foregroundStyle(theme.secondaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .accessibilityIdentifier("wallhaven.status")
+                }
             }
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .onAppear {
-            context.window.setTitle("Wallpapers")
-            if let query = context.arguments[WallpapersApp.queryArgument] {
-                search(query, color: context.arguments[WallpapersApp.colorArgument])
-            } else if model.items.isEmpty {
-                model.reload()
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .onAppear {
+                context.window.setTitle("Wallpapers")
+                if let query = context.arguments[WallpapersApp.queryArgument] {
+                    search(query, color: context.arguments[WallpapersApp.colorArgument])
+                } else if model.items.isEmpty {
+                    model.reload()
+                }
             }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: WallpapersApp.searchRequested)) { note in
-            guard let query = note.userInfo?[WallpapersApp.queryArgument] as? String else { return }
-            search(query, color: note.userInfo?[WallpapersApp.colorArgument] as? String)
-        }
-        .sheet(item: $model.detail) { wallpaper in
-            WallhavenDetailView(wallpaper: wallpaper, model: model, host: context.host)
-                .environment(\.desktopWallpapers, wallpapers)
-                .environment(\.desktopTheme, theme)
-        }
-        .sheet(item: $model.quickLook) { wallpaper in
-            RemoteImage(url: wallpaper.thumbs.large, session: model.client.session, maxPixel: 1600)
-                .scaledToFit()
-                .frame(minWidth: 700, minHeight: 460)
-                .onTapGesture { model.quickLook = nil }
-                .onKeyPress(.space) { model.quickLook = nil; return .handled }
-                .accessibilityIdentifier("wallhaven.quickLook")
+            .onReceive(NotificationCenter.default.publisher(for: WallpapersApp.searchRequested)) { note in
+                guard let query = note.userInfo?[WallpapersApp.queryArgument] as? String else { return }
+                search(query, color: note.userInfo?[WallpapersApp.colorArgument] as? String)
+            }
+            .sheet(item: model.binding(\.detail)) { wallpaper in
+                WallhavenDetailView(wallpaper: wallpaper, model: model, host: context.host)
+                    .environment(\.desktopWallpapers, wallpapers)
+                    .environment(\.desktopTheme, theme)
+            }
+            .sheet(item: model.binding(\.quickLook)) { wallpaper in
+                RemoteImage(url: wallpaper.thumbs.large, session: model.client.session, maxPixel: 1600)
+                    .scaledToFit()
+                    .frame(minWidth: 700, minHeight: 460)
+                    .onTapGesture { model.quickLook = nil }
+                    .keyPressCompat(.space, iOS16Active: true) { model.quickLook = nil; return true }
+                    .accessibilityIdentifier("wallhaven.quickLook")
+            }
         }
     }
 
     private var toolbar: some View {
         HStack(spacing: 10) {
-            Picker("Browse", selection: $model.mode) {
+            Picker("Browse", selection: model.binding(\.mode)) {
                 ForEach(WallhavenBrowserModel.Mode.allCases) { Text($0.rawValue).tag($0) }
             }
             .pickerStyle(.segmented)
             .fixedSize()
             .accessibilityIdentifier("wallhaven.mode")
             if model.mode == .toplist {
-                Picker("Range", selection: Binding(get: { model.query.topRange },
+                Picker("Range", selection: Binding(tracking: { model.query.topRange },
                                                    set: { model.query.topRange = $0; model.reload() })) {
                     ForEach(Wallhaven.TopRange.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.menu)
             }
             if model.mode == .search {
-                TextField("Search tags or words", text: $model.query.text)
+                TextField("Search tags or words", text: model.binding(\.query.text))
                     .textFieldStyle(.roundedBorder)
                     .frame(maxWidth: 220)
                     .focused($searchFocused)
@@ -308,18 +313,18 @@ struct WallpapersAppView: View {
             }
             Spacer(minLength: 0)
             Menu {
-                Toggle("General", isOn: Binding(get: { model.query.general }, set: { model.query.general = $0; model.reload() }))
-                Toggle("Anime", isOn: Binding(get: { model.query.anime }, set: { model.query.anime = $0; model.reload() }))
-                Toggle("People", isOn: Binding(get: { model.query.people }, set: { model.query.people = $0; model.reload() }))
+                Toggle("General", isOn: Binding(tracking: { model.query.general }, set: { model.query.general = $0; model.reload() }))
+                Toggle("Anime", isOn: Binding(tracking: { model.query.anime }, set: { model.query.anime = $0; model.reload() }))
+                Toggle("People", isOn: Binding(tracking: { model.query.people }, set: { model.query.people = $0; model.reload() }))
                 Divider()
-                Picker("Orientation", selection: Binding(get: { model.query.orientation },
+                Picker("Orientation", selection: Binding(tracking: { model.query.orientation },
                                                          set: { model.query.orientation = $0; model.reload() })) {
                     Text("Any shape").tag(Wallhaven.Orientation.any)
                     Text("Landscape").tag(Wallhaven.Orientation.landscape)
                     Text("Portrait").tag(Wallhaven.Orientation.portrait)
                 }
                 Toggle("At least this screen (\(WallhavenBrowserModel.screenPixelSize))",
-                       isOn: Binding(get: { model.matchesScreen }, set: { model.matchesScreen = $0; model.reload() }))
+                       isOn: Binding(tracking: { model.matchesScreen }, set: { model.matchesScreen = $0; model.reload() }))
                 Divider()
                 Menu("Color") {
                     Button("Any color") { model.query.color = nil; model.reload() }
@@ -342,17 +347,14 @@ struct WallpapersAppView: View {
     @ViewBuilder
     private var content: some View {
         if let error = model.error, model.items.isEmpty {
-            ContentUnavailableView {
-                Label("Can't load wallpapers", systemImage: "wifi.exclamationmark")
-            } description: {
-                Text(error.localizedDescription)
-            } actions: {
+            CompatUnavailableView("Can't load wallpapers", systemImage: "wifi.exclamationmark",
+                                  message: error.localizedDescription) {
                 Button("Try Again") { model.reload() }.buttonStyle(.primary)
             }
             .frame(maxHeight: .infinity)
         } else if model.items.isEmpty && !model.isLoading {
-            ContentUnavailableView(model.mode == .favorites ? "No favorites yet" : "Nothing found",
-                                   systemImage: "photo.on.rectangle.angled")
+            CompatUnavailableView(model.mode == .favorites ? "No favorites yet" : "Nothing found",
+                                  systemImage: "photo.on.rectangle.angled")
                 .frame(maxHeight: .infinity)
         } else {
             grid
@@ -361,51 +363,60 @@ struct WallpapersAppView: View {
 
     private var grid: some View {
         GeometryReader { proxy in
-            let count = max(1, Int((proxy.size.width - 24) / Self.cellWidth))
-            ScrollViewReader { scroller in
-                ScrollView {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: count), spacing: 10) {
-                        ForEach(Array(model.items.enumerated()), id: \.element.id) { index, wallpaper in
-                            thumbnail(wallpaper, isSelected: model.selection == index)
-                                .id(wallpaper.id)
-                                .onAppear { model.loadMoreIfNeeded(after: wallpaper) }
+            WithPerceptionTracking {
+                let count = max(1, Int((proxy.size.width - 24) / Self.cellWidth))
+                ScrollViewReader { scroller in
+                    WithPerceptionTracking {
+                        ScrollView {
+                            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: count), spacing: 10) {
+                                ForEach(Array(model.items.enumerated()), id: \.element.id) { index, wallpaper in
+                                    WithPerceptionTracking {
+                                        thumbnail(wallpaper, isSelected: model.selection == index)
+                                            .id(wallpaper.id)
+                                            .onAppear { model.loadMoreIfNeeded(after: wallpaper) }
+                                    }
+                                }
+                            }
+                            .padding(12)
+                            if model.isLoading { ProgressView().padding() }
+                        }
+                        .onChangeCompat(of: model.selection) { _, index in
+                            if let index, model.items.indices.contains(index) {
+                                withAnimation { scroller.scrollTo(model.items[index].id) }
+                            }
                         }
                     }
-                    .padding(12)
-                    if model.isLoading { ProgressView().padding() }
                 }
-                .onChange(of: model.selection) { _, index in
-                    if let index, model.items.indices.contains(index) {
-                        withAnimation { scroller.scrollTo(model.items[index].id) }
-                    }
-                }
+                .onAppear { columns = count }
+                .onChangeCompat(of: count) { _, value in columns = value }
             }
-            .onAppear { columns = count }
-            .onChange(of: count) { _, value in columns = value }
         }
-        .focusable()
-        .focusEffectDisabled()
+        .focusableWithoutEffectCompat()
         .focused($gridFocused)
-        .onKeyPress(.leftArrow) { model.moveSelection(by: -1, columns: columns); return .handled }
-        .onKeyPress(.rightArrow) { model.moveSelection(by: 1, columns: columns); return .handled }
-        .onKeyPress(.upArrow) { model.moveSelection(by: -columns, columns: columns); return .handled }
-        .onKeyPress(.downArrow) { model.moveSelection(by: columns, columns: columns); return .handled }
-        .onKeyPress(.return) {
+        .keyPressCompat(.leftArrow, iOS16Active: gridKeysActive) { model.moveSelection(by: -1, columns: columns); return true }
+        .keyPressCompat(.rightArrow, iOS16Active: gridKeysActive) { model.moveSelection(by: 1, columns: columns); return true }
+        .keyPressCompat(.upArrow, iOS16Active: gridKeysActive) { model.moveSelection(by: -columns, columns: columns); return true }
+        .keyPressCompat(.downArrow, iOS16Active: gridKeysActive) { model.moveSelection(by: columns, columns: columns); return true }
+        .keyPressCompat(.return, iOS16Active: gridKeysActive) {
             if let index = model.selection { model.detail = model.items[index] }
-            return .handled
+            return true
         }
-        .onKeyPress(.space) {
+        .keyPressCompat(.space, iOS16Active: gridKeysActive) {
             if let index = model.selection { model.quickLook = model.items[index] }
-            return .handled
+            return true
         }
-        .onKeyPress(characters: .init(charactersIn: "f"), phases: .down) { press in
-            guard press.modifiers.contains(.command) else { return .ignored }
+        .commandKeyPressCompat("f", iOS16Active: isWindowFocused && !isShowingSheet) {
             model.mode = .search
             searchFocused = true
-            return .handled
         }
         .onAppear { gridFocused = true }
     }
+
+    private var isShowingSheet: Bool { model.detail != nil || model.quickLook != nil }
+
+    /// iOS 16 has no grid focus: the grid takes the keys while its window is focused and the
+    /// search field is not.
+    private var gridKeysActive: Bool { isWindowFocused && !searchFocused && !isShowingSheet }
 
     private func thumbnail(_ wallpaper: Wallhaven.Wallpaper, isSelected: Bool) -> some View {
         Button { model.detail = wallpaper } label: {
@@ -462,26 +473,28 @@ struct WallhavenDetailView: View {
     @State private var showsFullResolution = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            ZStack {
-                Color.black
-                RemoteImage(url: wallpaper.thumbs.large, session: model.client.session, maxPixel: 1400).scaledToFit()
-                if showsFullResolution {
-                    RemoteImage(url: wallpaper.path, session: model.client.session, maxPixel: 2400).scaledToFit()
-                        .transition(.opacity)
+        WithPerceptionTracking {
+            HStack(spacing: 0) {
+                ZStack {
+                    Color.black
+                    RemoteImage(url: wallpaper.thumbs.large, session: model.client.session, maxPixel: 1400).scaledToFit()
+                    if showsFullResolution {
+                        RemoteImage(url: wallpaper.path, session: model.client.session, maxPixel: 2400).scaledToFit()
+                            .transition(.opacity)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .accessibilityIdentifier("wallhaven.preview")
+                details.frame(width: 300)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .accessibilityIdentifier("wallhaven.preview")
-            details.frame(width: 300)
+            .frame(minWidth: 820, minHeight: 520)
+            .task {
+                info = try? await model.client.info(id: wallpaper.id)
+                withAnimation { showsFullResolution = true }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("wallhaven.detail")
         }
-        .frame(minWidth: 820, minHeight: 520)
-        .task {
-            info = try? await model.client.info(id: wallpaper.id)
-            withAnimation { showsFullResolution = true }
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("wallhaven.detail")
     }
 
     private var details: some View {

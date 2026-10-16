@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 import UniformTypeIdentifiers
 
@@ -192,47 +193,49 @@ struct ThemeEditorView: View {
                                     "Bright Magenta", "Bright Cyan", "Bright White"]
 
     var body: some View {
-        HStack(alignment: .top, spacing: 0) {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    header
-                    SettingsSection(title: "Main colours", symbol: "paintpalette") {
-                        colorRow("Accent", $draft.accent, id: "accent")
-                        colorRow("Background", $draft.background, id: "background")
-                        colorRow("Foreground", $draft.foreground, id: "foreground")
-                        colorRow("Selection", $draft.selection, id: "selection")
-                        colorRow("Cursor", $draft.cursor, id: "cursor")
-                        colorRow("Red (urgent)", $draft.ansi[1], id: "red")
-                    }
-                    SettingsSection(title: "Terminal colours", symbol: "terminal") {
-                        LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
-                            ForEach(0..<16, id: \.self) { index in
-                                colorRow(Self.ansiNames[index], $draft.ansi[index], id: "ansi\(index)", compact: true)
-                                    .disabled(index == 0 || index == 7)
-                            }
+        WithPerceptionTracking {
+            HStack(alignment: .top, spacing: 0) {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        header
+                        SettingsSection(title: "Main colours", symbol: "paintpalette") {
+                            colorRow("Accent", $draft.accent, id: "accent")
+                            colorRow("Background", $draft.background, id: "background")
+                            colorRow("Foreground", $draft.foreground, id: "foreground")
+                            colorRow("Selection", $draft.selection, id: "selection")
+                            colorRow("Cursor", $draft.cursor, id: "cursor")
+                            colorRow("Red (urgent)", $draft.ansi[1], id: "red")
                         }
-                        Text("Black and White are the background and foreground.").font(.caption).foregroundStyle(theme.secondaryText)
+                        SettingsSection(title: "Terminal colours", symbol: "terminal") {
+                            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 8) {
+                                ForEach(0..<16, id: \.self) { index in
+                                    colorRow(Self.ansiNames[index], $draft.ansi[index], id: "ansi\(index)", compact: true)
+                                        .disabled(index == 0 || index == 7)
+                                }
+                            }
+                            Text("Black and White are the background and foreground.").font(.caption).foregroundStyle(theme.secondaryText)
+                        }
                     }
+                    .padding(20)
+                }
+                .frame(minWidth: 420)
+                theme.separator.frame(width: 1)
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("Preview").font(.headline)
+                    ThemePreviewCard(theme: draft.isValid ? draft.theme : nil, fallback: nil, showsNotification: true)
+                        .frame(height: 220)
+                        .accessibilityIdentifier("themes.editor.preview")
+                    contrast
+                    Spacer()
                 }
                 .padding(20)
+                .frame(width: 340)
             }
-            .frame(minWidth: 420)
-            theme.separator.frame(width: 1)
-            VStack(alignment: .leading, spacing: 14) {
-                Text("Preview").font(.headline)
-                ThemePreviewCard(theme: draft.isValid ? draft.theme : nil, fallback: nil, showsNotification: true)
-                    .frame(height: 220)
-                    .accessibilityIdentifier("themes.editor.preview")
-                contrast
-                Spacer()
+            .onAppear(perform: takePendingDuplicate)
+            .fileImporter(isPresented: $isImporting, allowedContentTypes: [.zip, UTType(filenameExtension: "toml") ?? .plainText, .plainText]) { result in
+                guard case .success(let url) = result else { return }
+                importTheme(url)
             }
-            .padding(20)
-            .frame(width: 340)
-        }
-        .onAppear(perform: takePendingDuplicate)
-        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.zip, UTType(filenameExtension: "toml") ?? .plainText, .plainText]) { result in
-            guard case .success(let url) = result else { return }
-            importTheme(url)
         }
     }
 
@@ -257,7 +260,9 @@ struct ThemeEditorView: View {
                         if let current = controller.colorThemes.current { draft = ThemeDraft(theme: current, name: "\(current.name) Copy") }
                     }
                     ForEach(controller.colorThemes.themes) { candidate in
-                        Button("From \(candidate.name)") { draft = ThemeDraft(theme: candidate, name: "\(candidate.name) Copy") }
+                        WithPerceptionTracking {
+                            Button("From \(candidate.name)") { draft = ThemeDraft(theme: candidate, name: "\(candidate.name) Copy") }
+                        }
                     }
                 }
                 .accessibilityIdentifier("themes.editor.new")

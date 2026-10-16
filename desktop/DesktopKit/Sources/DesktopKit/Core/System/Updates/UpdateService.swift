@@ -1,12 +1,12 @@
 import Network
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
 /// Checks GitHub for new LinPad releases and Alpine for package upgrades, downloads Linux
 /// system updates and hands them to the host's update path. One per host, shared by
 /// Settings › Updates, Quick Settings and the notification center.
-@Observable @MainActor
+@Perceptible @MainActor
 final class UpdateService {
     enum Channel: String, CaseIterable, Identifiable {
         case stable
@@ -83,21 +83,21 @@ final class UpdateService {
     let appVersion: String
 
     /// Shows a toast (and records it in the notification center); set by the desktop.
-    @ObservationIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
+    @PerceptionIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
     /// Opens Settings › Updates; set by the desktop.
-    @ObservationIgnored var showSettings: (() -> Void)?
+    @PerceptionIgnored var showSettings: (() -> Void)?
 
-    @ObservationIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let host: any LinuxHost
     /// The host's rollback, when it keeps earlier systems.
     var rollback: (any LinuxSystemRollingBack)? { host as? any LinuxSystemRollingBack }
     /// Reads files in the guest (the repair kit's version).
     var linuxHost: any LinuxHost { host }
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private let client: ReleaseClient
-    @ObservationIgnored private var downloader: SystemUpdateDownloader?
-    @ObservationIgnored private var monitor: NWPathMonitor?
-    @ObservationIgnored private var schedule: Task<Void, Never>?
-    @ObservationIgnored private var lastProgressUpdate = Date.distantPast
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private let client: ReleaseClient
+    @PerceptionIgnored private var downloader: SystemUpdateDownloader?
+    @PerceptionIgnored private var monitor: NWPathMonitor?
+    @PerceptionIgnored private var schedule: Task<Void, Never>?
+    @PerceptionIgnored private var lastProgressUpdate = Date.distantPast
     private static let maxLogLines = 400
 
     init(host: any LinuxHost, defaults: UserDefaults = .standard, appVersion: String? = nil) {
@@ -113,7 +113,7 @@ final class UpdateService {
         client = ReleaseClient(feedOverride: feed)
     }
 
-    @ObservationIgnored private static var services: [ObjectIdentifier: UpdateService] = [:]
+    @PerceptionIgnored private static var services: [ObjectIdentifier: UpdateService] = [:]
 
     static func shared(for host: any LinuxHost) -> UpdateService {
         let key = ObjectIdentifier(host)

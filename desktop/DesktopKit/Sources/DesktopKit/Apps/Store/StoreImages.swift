@@ -1,4 +1,5 @@
 import CryptoKit
+import Perception
 import SwiftUI
 import UIKit
 
@@ -65,29 +66,31 @@ struct StoreRemoteImage<Fallback: View>: View {
     @State private var failed = false
 
     var body: some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.high)
-                    .aspectRatio(contentMode: contentMode)
-            } else if failed || url == nil {
-                fallback()
-            } else {
-                StoreSkeleton()
+        WithPerceptionTracking {
+            Group {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .interpolation(.high)
+                        .aspectRatio(contentMode: contentMode)
+                } else if failed || url == nil {
+                    fallback()
+                } else {
+                    StoreSkeleton()
+                }
             }
-        }
-        .task(id: url) {
-            guard let url else { return }
-            if let hit = StoreImageLoader.shared.cached(url) {
-                image = hit
-                return
+            .task(id: url) {
+                guard let url else { return }
+                if let hit = StoreImageLoader.shared.cached(url) {
+                    image = hit
+                    return
+                }
+                image = nil
+                failed = false
+                let loaded = await StoreImageLoader.shared.image(url)
+                image = loaded
+                failed = loaded == nil
             }
-            image = nil
-            failed = false
-            let loaded = await StoreImageLoader.shared.image(url)
-            image = loaded
-            failed = loaded == nil
         }
     }
 }
@@ -100,12 +103,14 @@ struct StoreSkeleton: View {
     @State private var bright = false
 
     var body: some View {
-        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-            .fill(theme.primaryText.opacity(bright ? 0.10 : 0.05))
-            .onAppear {
-                guard !reduceMotion else { return }
-                withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { bright = true }
-            }
-            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .fill(theme.primaryText.opacity(bright ? 0.10 : 0.05))
+                .onAppear {
+                    guard !reduceMotion else { return }
+                    withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) { bright = true }
+                }
+                .accessibilityHidden(true)
+        }
     }
 }

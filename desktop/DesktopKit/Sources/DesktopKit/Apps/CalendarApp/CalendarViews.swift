@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 // MARK: - Month
 
@@ -17,49 +18,55 @@ struct MonthGridView: View {
     private let weekNumberWidth: CGFloat = 30
 
     var body: some View {
-        let days = CalendarMath.monthGrid(for: month, calendar: calendar)
-        let events = store.events(in: CalendarMath.gridInterval(for: month, calendar: calendar))
-        VStack(spacing: 0) {
-            HStack(spacing: 0) {
-                if showsWeekNumbers { Color.clear.frame(width: weekNumberWidth) }
-                ForEach(Array(CalendarMath.shortWeekdaySymbols(calendar: calendar).enumerated()), id: \.offset) { _, symbol in
-                    Text(symbol.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.secondaryText)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.trailing, 8)
+        WithPerceptionTracking {
+            let days = CalendarMath.monthGrid(for: month, calendar: calendar)
+            let events = store.events(in: CalendarMath.gridInterval(for: month, calendar: calendar))
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    if showsWeekNumbers { Color.clear.frame(width: weekNumberWidth) }
+                    ForEach(Array(CalendarMath.shortWeekdaySymbols(calendar: calendar).enumerated()), id: \.offset) { _, symbol in
+                        Text(symbol.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(theme.secondaryText)
+                            .frame(maxWidth: .infinity, alignment: .trailing)
+                            .padding(.trailing, 8)
+                    }
                 }
-            }
-            .frame(height: 26)
-            ThemedSeparator()
-            GeometryReader { proxy in
-                let rowHeight = proxy.size.height / 6
-                let visibleChips = max(Int((rowHeight - 28) / 19), 0)
-                VStack(spacing: 0) {
-                    ForEach(0..<6, id: \.self) { week in
-                        HStack(spacing: 0) {
-                            if showsWeekNumbers {
-                                Text("\(CalendarMath.weekNumber(of: days[week * 7], calendar: calendar))")
-                                    .font(.system(size: 10).monospacedDigit())
-                                    .foregroundStyle(theme.secondaryText)
-                                    .frame(width: weekNumberWidth, height: rowHeight, alignment: .top)
-                                    .padding(.top, 8)
-                            }
-                            ForEach(days[(week * 7)..<(week * 7 + 7)], id: \.self) { day in
-                                let dayEvents = events.filter { $0.overlaps(CalendarMath.day(day, calendar: calendar)) }
-                                dayCell(day, events: dayEvents, chips: visibleChips)
-                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                                    .overlay(alignment: .trailing) { ThemedSeparator(vertical: true) }
+                .frame(height: 26)
+                ThemedSeparator()
+                GeometryReader { proxy in
+                    WithPerceptionTracking {
+                        let rowHeight = proxy.size.height / 6
+                        let visibleChips = max(Int((rowHeight - 28) / 19), 0)
+                        VStack(spacing: 0) {
+                            ForEach(0..<6, id: \.self) { week in
+                                HStack(spacing: 0) {
+                                    if showsWeekNumbers {
+                                        Text("\(CalendarMath.weekNumber(of: days[week * 7], calendar: calendar))")
+                                            .font(.system(size: 10).monospacedDigit())
+                                            .foregroundStyle(theme.secondaryText)
+                                            .frame(width: weekNumberWidth, height: rowHeight, alignment: .top)
+                                            .padding(.top, 8)
+                                    }
+                                    ForEach(days[(week * 7)..<(week * 7 + 7)], id: \.self) { day in
+                                        WithPerceptionTracking {
+                                            let dayEvents = events.filter { $0.overlaps(CalendarMath.day(day, calendar: calendar)) }
+                                            dayCell(day, events: dayEvents, chips: visibleChips)
+                                                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                                .overlay(alignment: .trailing) { ThemedSeparator(vertical: true) }
+                                        }
+                                    }
+                                }
+                                .frame(height: rowHeight)
+                                .overlay(alignment: .bottom) { ThemedSeparator() }
                             }
                         }
-                        .frame(height: rowHeight)
-                        .overlay(alignment: .bottom) { ThemedSeparator() }
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("calendar.month")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("calendar.month")
     }
 
     private func dayCell(_ day: Date, events: [CalendarEvent], chips: Int) -> some View {
@@ -76,9 +83,11 @@ struct MonthGridView: View {
                     .background(Circle().fill(isToday ? theme.accent : Color.clear))
             }
             ForEach(events.prefix(chips)) { event in
-                Button { onEdit(event) } label: { chip(event) }
-                    .buttonStyle(.plain)
-                    .accessibilityIdentifier("calendar.event")
+                WithPerceptionTracking {
+                    Button { onEdit(event) } label: { chip(event) }
+                        .buttonStyle(.plain)
+                        .accessibilityIdentifier("calendar.event")
+                }
             }
             if events.count > chips {
                 Text("\(events.count - chips) more")
@@ -148,28 +157,34 @@ struct TimeGridView: View {
     private let gutter: CGFloat = 52
 
     var body: some View {
-        let span = DateInterval(start: days.first ?? Date(),
-                                end: CalendarMath.day(days.last ?? Date(), calendar: calendar).end)
-        let events = store.events(in: span)
-        VStack(spacing: 0) {
-            header(events: events.filter(\.isAllDay))
-            ThemedSeparator()
-            ScrollViewReader { reader in
-                ScrollView {
-                    HStack(alignment: .top, spacing: 0) {
-                        hourLabels
-                        ForEach(days, id: \.self) { day in
-                            dayColumn(day, events: events.filter { !$0.isAllDay && $0.overlaps(CalendarMath.day(day, calendar: calendar)) })
-                                .overlay(alignment: .leading) { ThemedSeparator(vertical: true) }
+        WithPerceptionTracking {
+            let span = DateInterval(start: days.first ?? Date(),
+                                    end: CalendarMath.day(days.last ?? Date(), calendar: calendar).end)
+            let events = store.events(in: span)
+            VStack(spacing: 0) {
+                header(events: events.filter(\.isAllDay))
+                ThemedSeparator()
+                ScrollViewReader { reader in
+                    WithPerceptionTracking {
+                        ScrollView {
+                            HStack(alignment: .top, spacing: 0) {
+                                hourLabels
+                                ForEach(days, id: \.self) { day in
+                                    WithPerceptionTracking {
+                                        dayColumn(day, events: events.filter { !$0.isAllDay && $0.overlaps(CalendarMath.day(day, calendar: calendar)) })
+                                            .overlay(alignment: .leading) { ThemedSeparator(vertical: true) }
+                                    }
+                                }
+                            }
+                            .frame(height: hourHeight * 24)
                         }
+                        .onAppear { reader.scrollTo(7, anchor: .top) }
                     }
-                    .frame(height: hourHeight * 24)
                 }
-                .onAppear { reader.scrollTo(7, anchor: .top) }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier(days.count == 1 ? "calendar.day" : "calendar.week")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier(days.count == 1 ? "calendar.day" : "calendar.week")
     }
 
     private func header(events: [CalendarEvent]) -> some View {
@@ -181,41 +196,45 @@ struct TimeGridView: View {
                 .padding(.trailing, 6)
                 .padding(.top, 34)
             ForEach(days, id: \.self) { day in
-                let isToday = calendar.isDateInToday(day)
-                VStack(spacing: 4) {
-                    Button { onSelect(day) } label: {
-                        HStack(spacing: 4) {
-                            Text(day.formatted(.dateTime.weekday(.abbreviated)))
-                                .foregroundStyle(theme.secondaryText)
-                            Text("\(calendar.component(.day, from: day))")
-                                .fontWeight(.semibold)
-                                .foregroundStyle(isToday ? theme.accent.readableLabel : theme.primaryText)
-                                .frame(minWidth: 24, minHeight: 24)
-                                .background(Circle().fill(isToday ? theme.accent : Color.clear))
-                        }
-                        .font(.system(size: 13).monospacedDigit())
-                        .frame(maxWidth: .infinity)
-                        .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    ForEach(events.filter { $0.overlaps(CalendarMath.day(day, calendar: calendar)) }) { event in
-                        Button { onEdit(event) } label: {
-                            Text(event.title.isEmpty ? "New Event" : event.title)
-                                .font(.system(size: 11, weight: .medium))
-                                .lineLimit(1)
-                                .foregroundStyle(store.color(of: event).readableLabel)
-                                .padding(.horizontal, 6)
-                                .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
-                                .background(RoundedRectangle(cornerRadius: 4).fill(store.color(of: event)))
+                WithPerceptionTracking {
+                    let isToday = calendar.isDateInToday(day)
+                    VStack(spacing: 4) {
+                        Button { onSelect(day) } label: {
+                            HStack(spacing: 4) {
+                                Text(day.formatted(.dateTime.weekday(.abbreviated)))
+                                    .foregroundStyle(theme.secondaryText)
+                                Text("\(calendar.component(.day, from: day))")
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(isToday ? theme.accent.readableLabel : theme.primaryText)
+                                    .frame(minWidth: 24, minHeight: 24)
+                                    .background(Circle().fill(isToday ? theme.accent : Color.clear))
+                            }
+                            .font(.system(size: 13).monospacedDigit())
+                            .frame(maxWidth: .infinity)
+                            .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
-                        .padding(.horizontal, 2)
+                        ForEach(events.filter { $0.overlaps(CalendarMath.day(day, calendar: calendar)) }) { event in
+                            WithPerceptionTracking {
+                                Button { onEdit(event) } label: {
+                                    Text(event.title.isEmpty ? "New Event" : event.title)
+                                        .font(.system(size: 11, weight: .medium))
+                                        .lineLimit(1)
+                                        .foregroundStyle(store.color(of: event).readableLabel)
+                                        .padding(.horizontal, 6)
+                                        .frame(maxWidth: .infinity, minHeight: 18, alignment: .leading)
+                                        .background(RoundedRectangle(cornerRadius: 4).fill(store.color(of: event)))
+                                }
+                                .buttonStyle(.plain)
+                                .padding(.horizontal, 2)
+                            }
+                        }
                     }
+                    .padding(.vertical, 6)
+                    .frame(maxWidth: .infinity)
+                    .background(calendar.isDate(day, inSameDayAs: selection) && days.count > 1
+                                ? theme.accent.opacity(0.08) : Color.clear)
                 }
-                .padding(.vertical, 6)
-                .frame(maxWidth: .infinity)
-                .background(calendar.isDate(day, inSameDayAs: selection) && days.count > 1
-                            ? theme.accent.opacity(0.08) : Color.clear)
             }
         }
     }
@@ -238,37 +257,41 @@ struct TimeGridView: View {
         let placements = EventColumns.layout(events)
         let dayRange = CalendarMath.day(day, calendar: calendar)
         return GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                VStack(spacing: 0) {
-                    ForEach(0..<24, id: \.self) { _ in
-                        Rectangle().fill(Color.clear)
-                            .frame(height: hourHeight)
-                            .overlay(alignment: .top) { ThemedSeparator() }
-                    }
-                }
-                .contentShape(Rectangle())
-                .onTapGesture(count: 2, coordinateSpace: .local) { location in
-                    onCreate(slot(at: location.y, on: day))
-                }
-                .onTapGesture { onSelect(day) }
-                ForEach(events) { event in
-                    let placement = placements[event.id] ?? .init(column: 0, columnCount: 1)
-                    let top = event.start <= dayRange.start ? 0 : CalendarMath.hourOffset(of: event.start, calendar: calendar)
-                    let bottom = event.end >= dayRange.end ? 24 : CalendarMath.hourOffset(of: event.end, calendar: calendar)
-                    let width = proxy.size.width / CGFloat(placement.columnCount)
-                    eventBlock(event)
-                        .frame(width: max(width - 3, 10), height: max(CGFloat(bottom - top) * hourHeight - 2, 18))
-                        .offset(x: CGFloat(placement.column) * width + 1, y: CGFloat(top) * hourHeight + 1)
-                }
-                if calendar.isDateInToday(day) {
-                    TimelineView(.everyMinute) { context in
-                        let y = CalendarMath.hourOffset(of: context.date, calendar: calendar) * hourHeight
-                        HStack(spacing: 0) {
-                            Circle().fill(theme.urgent).frame(width: 8, height: 8)
-                            Rectangle().fill(theme.urgent).frame(height: 1.5)
+            WithPerceptionTracking {
+                ZStack(alignment: .topLeading) {
+                    VStack(spacing: 0) {
+                        ForEach(0..<24, id: \.self) { _ in
+                            Rectangle().fill(Color.clear)
+                                .frame(height: hourHeight)
+                                .overlay(alignment: .top) { ThemedSeparator() }
                         }
-                        .offset(x: -4, y: y - 4)
-                        .allowsHitTesting(false)
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture(count: 2, coordinateSpace: .local) { location in
+                        onCreate(slot(at: location.y, on: day))
+                    }
+                    .onTapGesture { onSelect(day) }
+                    ForEach(events) { event in
+                        WithPerceptionTracking {
+                            let placement = placements[event.id] ?? .init(column: 0, columnCount: 1)
+                            let top = event.start <= dayRange.start ? 0 : CalendarMath.hourOffset(of: event.start, calendar: calendar)
+                            let bottom = event.end >= dayRange.end ? 24 : CalendarMath.hourOffset(of: event.end, calendar: calendar)
+                            let width = proxy.size.width / CGFloat(placement.columnCount)
+                            eventBlock(event)
+                                .frame(width: max(width - 3, 10), height: max(CGFloat(bottom - top) * hourHeight - 2, 18))
+                                .offset(x: CGFloat(placement.column) * width + 1, y: CGFloat(top) * hourHeight + 1)
+                        }
+                    }
+                    if calendar.isDateInToday(day) {
+                        TimelineView(.everyMinute) { context in
+                            let y = CalendarMath.hourOffset(of: context.date, calendar: calendar) * hourHeight
+                            HStack(spacing: 0) {
+                                Circle().fill(theme.urgent).frame(width: 8, height: 8)
+                                Rectangle().fill(theme.urgent).frame(height: 1.5)
+                            }
+                            .offset(x: -4, y: y - 4)
+                            .allowsHitTesting(false)
+                        }
                     }
                 }
             }
@@ -339,85 +362,87 @@ struct EventEditorView: View {
     private var isEditable: Bool { store.calendar(event.calendarID)?.isEditable ?? true }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text(isNew ? "New Event" : "Edit Event").font(.headline)
-                if event.isRecurring {
-                    Label("Repeats", systemImage: "repeat").font(.caption).foregroundStyle(theme.secondaryText)
-                }
-                Spacer()
-            }
-            TextField("Title", text: $event.title)
-                .textFieldStyle(.roundedBorder)
-                .focused($titleFocused)
-                .submitLabel(.done)
-                .onSubmit(save)
-                .accessibilityIdentifier("calendar.editor.title")
-            TextField("Location", text: $event.location)
-                .textFieldStyle(.roundedBorder)
-            Toggle("All-day", isOn: $event.isAllDay)
-                .tint(theme.accent)
-            DatePicker("Starts", selection: startKeepingDuration, displayedComponents: event.isAllDay ? [.date] : [.date, .hourAndMinute])
-            DatePicker("Ends", selection: $event.end, in: event.start..., displayedComponents: event.isAllDay ? [.date] : [.date, .hourAndMinute])
-            HStack {
-                Text("Calendar")
-                Spacer()
-                Picker("Calendar", selection: $event.calendarID) {
-                    ForEach(store.editableCalendars) { info in
-                        Label(info.title, systemImage: "circle.fill").tag(info.id)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(isNew ? "New Event" : "Edit Event").font(.headline)
+                    if event.isRecurring {
+                        Label("Repeats", systemImage: "repeat").font(.caption).foregroundStyle(theme.secondaryText)
                     }
+                    Spacer()
                 }
-                .labelsHidden()
-                .tint(store.calendar(event.calendarID)?.color ?? theme.accent)
-            }
-            HStack {
-                Text("Alert")
-                Spacer()
-                Picker("Alert", selection: $event.alertMinutes) {
-                    ForEach(Self.alertChoices, id: \.0) { Text($0.0).tag($0.1) }
-                }
-                .labelsHidden()
-            }
-            TextField("Notes", text: $event.notes, axis: .vertical)
-                .lineLimit(2...4)
-                .textFieldStyle(.roundedBorder)
-            HStack {
-                if !isNew && isEditable {
-                    Button("Delete", role: .destructive) { confirmsDeletion = true }
-                        .accessibilityIdentifier("calendar.editor.delete")
-                }
-                Spacer()
-                Button("Cancel", action: onDone)
-                    .keyboardShortcut(.cancelAction)
-                Button(isNew ? "Add" : "Save", action: save)
-                    .buttonStyle(.borderedProminent)
+                TextField("Title", text: $event.title)
+                    .textFieldStyle(.roundedBorder)
+                    .focused($titleFocused)
+                    .submitLabel(.done)
+                    .onSubmit(save)
+                    .accessibilityIdentifier("calendar.editor.title")
+                TextField("Location", text: $event.location)
+                    .textFieldStyle(.roundedBorder)
+                Toggle("All-day", isOn: $event.isAllDay)
                     .tint(theme.accent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(!isEditable)
-                    .accessibilityIdentifier("calendar.editor.save")
+                DatePicker("Starts", selection: startKeepingDuration, displayedComponents: event.isAllDay ? [.date] : [.date, .hourAndMinute])
+                DatePicker("Ends", selection: $event.end, in: event.start..., displayedComponents: event.isAllDay ? [.date] : [.date, .hourAndMinute])
+                HStack {
+                    Text("Calendar")
+                    Spacer()
+                    Picker("Calendar", selection: $event.calendarID) {
+                        ForEach(store.editableCalendars) { info in
+                            Label(info.title, systemImage: "circle.fill").tag(info.id)
+                        }
+                    }
+                    .labelsHidden()
+                    .tint(store.calendar(event.calendarID)?.color ?? theme.accent)
+                }
+                HStack {
+                    Text("Alert")
+                    Spacer()
+                    Picker("Alert", selection: $event.alertMinutes) {
+                        ForEach(Self.alertChoices, id: \.0) { Text($0.0).tag($0.1) }
+                    }
+                    .labelsHidden()
+                }
+                TextField("Notes", text: $event.notes, axis: .vertical)
+                    .lineLimit(2...4)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    if !isNew && isEditable {
+                        Button("Delete", role: .destructive) { confirmsDeletion = true }
+                            .accessibilityIdentifier("calendar.editor.delete")
+                    }
+                    Spacer()
+                    Button("Cancel", action: onDone)
+                        .keyboardShortcut(.cancelAction)
+                    Button(isNew ? "Add" : "Save", action: save)
+                        .buttonStyle(.borderedProminent)
+                        .tint(theme.accent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(!isEditable)
+                        .accessibilityIdentifier("calendar.editor.save")
+                }
             }
-        }
-        .font(.system(size: 13))
-        .padding(18)
-        .frame(width: 400)
-        .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.windowBackground))
-        .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator))
-        .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
-        .onAppear { if isNew { titleFocused = true } }
-        .onChange(of: event.isAllDay) { _, allDay in
-            guard allDay else { return }
-            let calendar = Calendar.current
-            event.start = calendar.startOfDay(for: event.start)
-            event.end = CalendarMath.day(event.start, calendar: calendar).end
-        }
-        .confirmationDialog("Delete “\(event.title)”?", isPresented: $confirmsDeletion) {
-            Button(event.isRecurring ? "Delete This Event Only" : "Delete Event", role: .destructive) {
-                store.delete(event)
-                onDone()
+            .font(.system(size: 13))
+            .padding(18)
+            .frame(width: 400)
+            .background(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.windowBackground))
+            .overlay(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator))
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
+            .onAppear { if isNew { titleFocused = true } }
+            .onChangeCompat(of: event.isAllDay) { _, allDay in
+                guard allDay else { return }
+                let calendar = Calendar.current
+                event.start = calendar.startOfDay(for: event.start)
+                event.end = CalendarMath.day(event.start, calendar: calendar).end
             }
+            .confirmationDialog("Delete “\(event.title)”?", isPresented: $confirmsDeletion) {
+                Button(event.isRecurring ? "Delete This Event Only" : "Delete Event", role: .destructive) {
+                    store.delete(event)
+                    onDone()
+                }
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("calendar.editor")
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("calendar.editor")
     }
 
     /// Moving the start keeps the duration, as Calendar does.

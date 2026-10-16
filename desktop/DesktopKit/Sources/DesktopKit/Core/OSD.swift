@@ -1,4 +1,5 @@
 import AVFoundation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -110,31 +111,33 @@ struct OSDView: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: state.symbol)
-                .font(.system(size: 18, weight: .semibold))
-                .frame(width: 26)
-                .contentTransition(.symbolEffect(.replace))
-            if let level = state.level {
-                ZStack(alignment: .leading) {
-                    Capsule().fill(theme.primaryText.opacity(0.15))
-                    Capsule().fill(theme.accent).frame(width: 180 * min(max(level, 0), 1))
+        WithPerceptionTracking {
+            HStack(spacing: 12) {
+                Image(systemName: state.symbol)
+                    .font(.system(size: 18, weight: .semibold))
+                    .frame(width: 26)
+                    .symbolReplaceCompat()
+                if let level = state.level {
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(theme.primaryText.opacity(0.15))
+                        Capsule().fill(theme.accent).frame(width: 180 * min(max(level, 0), 1))
+                    }
+                    .frame(width: 180, height: 6)
+                    .animation(.easeOut(duration: 0.15), value: level)
+                } else {
+                    Text(state.label).font(.system(size: 15, weight: .medium)).lineLimit(1)
                 }
-                .frame(width: 180, height: 6)
-                .animation(.easeOut(duration: 0.15), value: level)
-            } else {
-                Text(state.label).font(.system(size: 15, weight: .medium)).lineLimit(1)
             }
+            .foregroundStyle(theme.primaryText)
+            .padding(.horizontal, 20)
+            .frame(height: 48)
+            .background(Capsule().fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear)))
+            .background(Capsule().fill(theme.windowBackground.opacity(0.85)))
+            .overlay(Capsule().strokeBorder(theme.borderActive ?? theme.separator, lineWidth: theme.borderActive == nil ? 1 : 2))
+            .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(state.label)
+            .accessibilityIdentifier("desktop.osd")
         }
-        .foregroundStyle(theme.primaryText)
-        .padding(.horizontal, 20)
-        .frame(height: 48)
-        .background(Capsule().fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear)))
-        .background(Capsule().fill(theme.windowBackground.opacity(0.85)))
-        .overlay(Capsule().strokeBorder(theme.borderActive ?? theme.separator, lineWidth: theme.borderActive == nil ? 1 : 2))
-        .shadow(color: .black.opacity(0.3), radius: 16, y: 6)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(state.label)
-        .accessibilityIdentifier("desktop.osd")
     }
 }

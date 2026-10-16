@@ -1,51 +1,54 @@
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
 /// Settings › Maintenance rows: Back Up, Restore, the schedule.
 struct BackupSettingsRows: View {
-    @Bindable var service: BackupService
+    @Perception.Bindable var service: BackupService
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        SettingsRow(title: "Back Up") {
-            HStack(spacing: 8) {
-                ToolbarTextButton(title: service.state.isBusy ? "Backing Up…" : "Back Up…", symbol: "externaldrive.badge.timemachine") {
-                    service.isBackupSheetRequested = true
+        WithPerceptionTracking {
+            SettingsRow(title: "Back Up") {
+                HStack(spacing: 8) {
+                    ToolbarTextButton(title: service.state.isBusy ? "Backing Up…" : "Back Up…", symbol: "externaldrive.badge.timemachine") {
+                        service.isBackupSheetRequested = true
+                    }
+                    .accessibilityIdentifier("settings.backUp")
+                    ToolbarTextButton(title: "Restore…", symbol: "clock.arrow.circlepath") {
+                        service.isRestoreSheetRequested = true
+                    }
+                    .disabled(service.state.isBusy)
+                    .accessibilityIdentifier("settings.restore")
                 }
-                .accessibilityIdentifier("settings.backUp")
-                ToolbarTextButton(title: "Restore…", symbol: "clock.arrow.circlepath") {
-                    service.isRestoreSheetRequested = true
+            }
+            .sheet(isPresented: service.binding(\.isBackupSheetRequested)) { BackupSheet(service: service) }
+            .sheet(isPresented: service.binding(\.isRestoreSheetRequested)) { RestoreSheet(service: service) }
+            SettingsRow(title: "Automatic backup") {
+                Picker("Automatic backup", selection: service.binding(\.schedule)) {
+                    ForEach(BackupSchedule.allCases) { Text($0.title).tag($0) }
                 }
-                .disabled(service.state.isBusy)
-                .accessibilityIdentifier("settings.restore")
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 240)
+                .accessibilityIdentifier("settings.backupSchedule")
             }
-        }
-        .sheet(isPresented: $service.isBackupSheetRequested) { BackupSheet(service: service) }
-        .sheet(isPresented: $service.isRestoreSheetRequested) { RestoreSheet(service: service) }
-        SettingsRow(title: "Automatic backup") {
-            Picker("Automatic backup", selection: $service.schedule) {
-                ForEach(BackupSchedule.allCases) { Text($0.title).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(maxWidth: 240)
-            .accessibilityIdentifier("settings.backupSchedule")
-        }
-        if service.schedule != .off {
-            SettingsRow(title: "Keep automatic backups") {
-                HStack(spacing: 10) {
-                    Text("\(service.keep)").monospacedDigit()
-                    Stepper("Keep", value: $service.keep, in: 1...10).labelsHidden()
+            if service.schedule != .off {
+                SettingsRow(title: "Keep automatic backups") {
+                    HStack(spacing: 10) {
+                        Text("\(service.keep)").monospacedDigit()
+                        Stepper("Keep", value: service.binding(\.keep), in: 1...10).labelsHidden()
+                    }
+                    .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
+                        .accessibilityIdentifier("settings.backupKeep")
                 }
-                .alignmentGuide(.firstTextBaseline) { $0[VerticalAlignment.center] + 5 }
-                    .accessibilityIdentifier("settings.backupKeep")
             }
+            Text(caption)
+                .font(.caption)
+                .foregroundStyle(theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("settings.backupStatus")
         }
-        Text(caption)
-            .font(.caption)
-            .foregroundStyle(theme.secondaryText)
-            .fixedSize(horizontal: false, vertical: true)
-            .accessibilityIdentifier("settings.backupStatus")
     }
 
     private var caption: String {
@@ -65,54 +68,56 @@ struct BackupSettingsRows: View {
 // MARK: - Back up
 
 struct BackupSheet: View {
-    @Bindable var service: BackupService
+    @Perception.Bindable var service: BackupService
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch service.state {
-                    case .idle, .scanning:
-                        Text("Measuring /root and /home…").foregroundStyle(.secondary)
-                        ProgressView()
-                    case .ready:
-                        preview
-                    case .running(let fraction, let detail):
-                        running(fraction: fraction, detail: detail)
-                    case .finished(let record, let warnings):
-                        finished(record, warnings: warnings)
-                    case .cancelled:
-                        Label("The backup was cancelled. Nothing was saved.", systemImage: "xmark.circle")
-                        backUpButton(title: "Back Up Again")
-                    case .failed(let message):
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("backup.error")
-                        backUpButton(title: "Try Again")
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch service.state {
+                        case .idle, .scanning:
+                            Text("Measuring /root and /home…").foregroundStyle(.secondary)
+                            ProgressView()
+                        case .ready:
+                            preview
+                        case .running(let fraction, let detail):
+                            running(fraction: fraction, detail: detail)
+                        case .finished(let record, let warnings):
+                            finished(record, warnings: warnings)
+                        case .cancelled:
+                            Label("The backup was cancelled. Nothing was saved.", systemImage: "xmark.circle")
+                            backUpButton(title: "Back Up Again")
+                        case .failed(let message):
+                            Label(message, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("backup.error")
+                            backUpButton(title: "Try Again")
+                        }
+                        if !service.backups.isEmpty, !service.state.isBusy { existingBackups }
                     }
-                    if !service.backups.isEmpty, !service.state.isBusy { existingBackups }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle("Back Up")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(service.state.isBusy ? "Hide" : "Done") { dismiss() }
-                        .accessibilityIdentifier("backup.done")
+                .navigationTitle("Back Up")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(service.state.isBusy ? "Hide" : "Done") { dismiss() }
+                            .accessibilityIdentifier("backup.done")
+                    }
                 }
             }
-        }
-        .frame(minWidth: 540, minHeight: 600)
-        .accessibilityIdentifier("desktop.backupSheet")
-        .task {
-            service.refreshBackups()
-            switch service.state {
-            case .idle, .failed, .cancelled, .finished: await service.refreshScan()
-            default: break
+            .frame(minWidth: 540, minHeight: 600)
+            .accessibilityIdentifier("desktop.backupSheet")
+            .task {
+                service.refreshBackups()
+                switch service.state {
+                case .idle, .failed, .cancelled, .finished: await service.refreshScan()
+                default: break
+                }
             }
         }
     }
@@ -125,17 +130,19 @@ struct BackupSheet: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Leave out").font(.headline)
                     ForEach(BackupExclusionCategory.allCases) { category in
-                        Toggle(isOn: Binding(get: { service.excluded.contains(category) },
-                                             set: { on in
-                                                 if on { service.excluded.insert(category) } else { service.excluded.remove(category) }
-                                             })) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("\(category.title) · \(BackupService.bytes(scan.kilobytes(of: category) * 1024))")
-                                Text(category.detail).font(.caption).foregroundStyle(.secondary)
-                                    .fixedSize(horizontal: false, vertical: true)
+                        WithPerceptionTracking {
+                            Toggle(isOn: Binding(tracking: { service.excluded.contains(category) },
+                                                 set: { on in
+                                                     if on { service.excluded.insert(category) } else { service.excluded.remove(category) }
+                                                 })) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("\(category.title) · \(BackupService.bytes(scan.kilobytes(of: category) * 1024))")
+                                    Text(category.detail).font(.caption).foregroundStyle(.secondary)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
                             }
+                            .accessibilityIdentifier("backup.exclude.\(category.rawValue)")
                         }
-                        .accessibilityIdentifier("backup.exclude.\(category.rawValue)")
                     }
                     if !service.mountPoints.isEmpty {
                         Label("iPad folders added in Files are never included; their files stay on the iPad.", systemImage: "ipad")
@@ -242,51 +249,53 @@ struct BackupSheet: View {
 // MARK: - Restore
 
 struct RestoreSheet: View {
-    @Bindable var service: BackupService
+    @Perception.Bindable var service: BackupService
     @Environment(\.dismiss) private var dismiss
     @State private var options = BackupService.RestoreOptions()
     @State private var confirmsReplace = false
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch service.restoreState {
-                    case .idle:
-                        chooser
-                    case .inspected(let url):
-                        if let contents = service.inspected { review(contents, url: url) }
-                    case .running(let fraction, let detail):
-                        if let fraction { ProgressView(value: fraction) } else { ProgressView() }
-                        Text(detail).font(.callout).monospacedDigit().accessibilityIdentifier("restore.progress")
-                        Text("Keep LinPad open until the restore finishes.").font(.caption).foregroundStyle(.secondary)
-                        if !service.restoreLog.isEmpty { log }
-                    case .finished(let summary):
-                        finished(summary)
-                    case .failed(let message):
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
-                            .accessibilityIdentifier("restore.error")
-                        Button("Choose Another Backup") { service.resetRestore() }.buttonStyle(.bordered)
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch service.restoreState {
+                        case .idle:
+                            chooser
+                        case .inspected(let url):
+                            if let contents = service.inspected { review(contents, url: url) }
+                        case .running(let fraction, let detail):
+                            if let fraction { ProgressView(value: fraction) } else { ProgressView() }
+                            Text(detail).font(.callout).monospacedDigit().accessibilityIdentifier("restore.progress")
+                            Text("Keep LinPad open until the restore finishes.").font(.caption).foregroundStyle(.secondary)
+                            if !service.restoreLog.isEmpty { log }
+                        case .finished(let summary):
+                            finished(summary)
+                        case .failed(let message):
+                            Label(message, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .accessibilityIdentifier("restore.error")
+                            Button("Choose Another Backup") { service.resetRestore() }.buttonStyle(.bordered)
+                        }
+                    }
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .navigationTitle("Restore")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(service.restoreState.isRunning ? "Hide" : "Done") { dismiss() }
+                            .accessibilityIdentifier("restore.done")
                     }
                 }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .navigationTitle("Restore")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(service.restoreState.isRunning ? "Hide" : "Done") { dismiss() }
-                        .accessibilityIdentifier("restore.done")
-                }
-            }
+            .frame(minWidth: 540, minHeight: 620)
+            .accessibilityIdentifier("desktop.restoreSheet")
+            .task { service.refreshBackups() }
+            .onDisappear { if !service.restoreState.isRunning, case .finished = service.restoreState { service.resetRestore() } }
         }
-        .frame(minWidth: 540, minHeight: 620)
-        .accessibilityIdentifier("desktop.restoreSheet")
-        .task { service.refreshBackups() }
-        .onDisappear { if !service.restoreState.isRunning, case .finished = service.restoreState { service.resetRestore() } }
     }
 
     private var chooser: some View {

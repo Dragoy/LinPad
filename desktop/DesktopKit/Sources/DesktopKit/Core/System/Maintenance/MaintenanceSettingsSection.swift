@@ -1,39 +1,42 @@
+import Perception
 import SwiftUI
 
 /// Settings › Maintenance: Back Up and Restore, Repair System, Reset to Factory and
 /// Export Diagnostics.
 struct MaintenanceSettingsSection: View {
-    @Bindable var service: SystemMaintenanceService
+    @Perception.Bindable var service: SystemMaintenanceService
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        SettingsSection(title: "Maintenance", symbol: "wrench.and.screwdriver") {
-            BackupSettingsRows(service: BackupService.shared(for: service.linuxHost))
-            ThemedSeparator()
-            SettingsRow(title: "Repair System") {
-                ToolbarTextButton(title: service.state.isRunning ? "Repairing…" : "Repair…", symbol: "bandage") {
-                    service.isRepairSheetRequested = true
+        WithPerceptionTracking {
+            SettingsSection(title: "Maintenance", symbol: "wrench.and.screwdriver") {
+                BackupSettingsRows(service: BackupService.shared(for: service.linuxHost))
+                ThemedSeparator()
+                SettingsRow(title: "Repair System") {
+                    ToolbarTextButton(title: service.state.isRunning ? "Repairing…" : "Repair…", symbol: "bandage") {
+                        service.isRepairSheetRequested = true
+                    }
+                    .disabled(service.kit == nil)
+                    .accessibilityIdentifier("settings.repairSystem")
                 }
-                .disabled(service.kit == nil)
-                .accessibilityIdentifier("settings.repairSystem")
-            }
-            .sheet(isPresented: $service.isRepairSheetRequested) { RepairSystemSheet(service: service) }
-            caption("Puts back LinPad's own system files as this version of the app ships them: Firefox's settings (video playback), desktop styles and session scripts, the optional-apps catalog, permissions and caches, and base packages that went missing (when online). Your files, your settings in /root and the apps you installed are kept.")
-            statusLine
-            ThemedSeparator()
-            SettingsRow(title: "Reset to Factory") {
-                ToolbarTextButton(title: "Reset…", symbol: "arrow.counterclockwise") {
-                    service.isResetSheetRequested = true
+                .sheet(isPresented: service.binding(\.isRepairSheetRequested)) { RepairSystemSheet(service: service) }
+                caption("Puts back LinPad's own system files as this version of the app ships them: Firefox's settings (video playback), desktop styles and session scripts, the optional-apps catalog, permissions and caches, and base packages that went missing (when online). Your files, your settings in /root and the apps you installed are kept.")
+                statusLine
+                ThemedSeparator()
+                SettingsRow(title: "Reset to Factory") {
+                    ToolbarTextButton(title: "Reset…", symbol: "arrow.counterclockwise") {
+                        service.isResetSheetRequested = true
+                    }
+                    .disabled(service.resetter == nil || service.state.isRunning)
+                    .accessibilityIdentifier("settings.resetToFactory")
                 }
-                .disabled(service.resetter == nil || service.state.isRunning)
-                .accessibilityIdentifier("settings.resetToFactory")
+                .sheet(isPresented: service.binding(\.isResetSheetRequested)) { FactoryResetSheet(service: service) }
+                caption("Reinstalls the Linux system that comes with the app, keeping your files or erasing everything. LinPad closes and finishes the reset the next time you open it.")
+                ThemedSeparator()
+                DiagnosticsSettingsRow(host: service.linuxHost, center: .shared)
             }
-            .sheet(isPresented: $service.isResetSheetRequested) { FactoryResetSheet(service: service) }
-            caption("Reinstalls the Linux system that comes with the app, keeping your files or erasing everything. LinPad closes and finishes the reset the next time you open it.")
-            ThemedSeparator()
-            DiagnosticsSettingsRow(host: service.linuxHost, center: .shared)
+            .task { await service.refreshInstalledKitVersion() }
         }
-        .task { await service.refreshInstalledKitVersion() }
     }
 
     private var statusLine: some View {
@@ -89,43 +92,45 @@ struct MaintenanceSettingsSection: View {
 // MARK: - Repair
 
 struct RepairSystemSheet: View {
-    @Bindable var service: SystemMaintenanceService
+    @Perception.Bindable var service: SystemMaintenanceService
     @Environment(\.dismiss) private var dismiss
 
     /// linpad-repair's steps, in order (release/guest/linpad-repair).
     static let steps = ["Permissions", "Firefox", "System files", "Styles and audio", "Packages", "Caches"]
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    switch service.state {
-                    case .idle, .failed:
-                        intro
-                    case .running, .finished:
-                        progress
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        switch service.state {
+                        case .idle, .failed:
+                            intro
+                        case .running, .finished:
+                            progress
+                        }
+                        if case .failed(let message) = service.state {
+                            Label(message, systemImage: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        if !service.log.isEmpty { logView }
                     }
-                    if case .failed(let message) = service.state {
-                        Label(message, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.orange)
-                            .fixedSize(horizontal: false, vertical: true)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .navigationTitle("Repair System")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(service.state.isRunning ? "Hide" : "Done") { dismiss() }
+                            .accessibilityIdentifier("repair.done")
                     }
-                    if !service.log.isEmpty { logView }
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle("Repair System")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button(service.state.isRunning ? "Hide" : "Done") { dismiss() }
-                        .accessibilityIdentifier("repair.done")
                 }
             }
+            .frame(minWidth: 520, minHeight: 560)
+            .accessibilityIdentifier("desktop.repairSheet")
         }
-        .frame(minWidth: 520, minHeight: 560)
-        .accessibilityIdentifier("desktop.repairSheet")
     }
 
     private var intro: some View {
@@ -158,10 +163,12 @@ struct RepairSystemSheet: View {
     private var progress: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Self.steps, id: \.self) { step in
-                HStack(spacing: 10) {
-                    stepIcon(step)
-                        .frame(width: 18)
-                    Text(step)
+                WithPerceptionTracking {
+                    HStack(spacing: 10) {
+                        stepIcon(step)
+                            .frame(width: 18)
+                        Text(step)
+                    }
                 }
             }
             if case .finished = service.state {
@@ -201,17 +208,19 @@ struct RepairSystemSheet: View {
 
     private var logView: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                Text(service.log.joined(separator: "\n"))
-                    .font(.caption2.monospaced())
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled)
-                Color.clear.frame(height: 1).id("end")
+            WithPerceptionTracking {
+                ScrollView {
+                    Text(service.log.joined(separator: "\n"))
+                        .font(.caption2.monospaced())
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .textSelection(.enabled)
+                    Color.clear.frame(height: 1).id("end")
+                }
+                .frame(minHeight: 120, maxHeight: 220)
+                .padding(8)
+                .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.25)))
+                .onChangeCompat(of: service.log.count) { _, _ in proxy.scrollTo("end") }
             }
-            .frame(minHeight: 120, maxHeight: 220)
-            .padding(8)
-            .background(RoundedRectangle(cornerRadius: 6).fill(Color.black.opacity(0.25)))
-            .onChange(of: service.log.count) { _, _ in proxy.scrollTo("end") }
         }
         .accessibilityIdentifier("repair.log")
     }
@@ -238,56 +247,58 @@ struct FactoryResetSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Reset to Factory replaces the whole Linux system with the one that comes with this version of LinPad. Try Repair System first: it fixes most problems and keeps everything.")
-                        .fixedSize(horizontal: false, vertical: true)
-                    choice(.keepFiles, title: "Keep my files", symbol: "folder.badge.person.crop",
-                           detail: "Keeps /root and /home: your projects, documents, downloads and settings files, and the iPad folders you added in Files. Removes the apps and packages you installed and every change outside /root and /home.")
-                    choice(.eraseEverything, title: "Erase everything", symbol: "trash",
-                           detail: "Deletes /root and /home and forgets the iPad folders you added. LinPad starts as if newly installed. The files inside those iPad folders stay on the iPad.")
-                    Text("LinPad closes now. Open it again to install the fresh system (a few minutes), then it starts as usual. Nothing changes until then.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Type \(Self.confirmationWord) to confirm")
-                            .font(.callout.weight(.semibold))
-                        TextField(Self.confirmationWord, text: $confirmation)
-                            .textFieldStyle(.roundedBorder)
-                            .textInputAutocapitalization(.characters)
-                            .autocorrectionDisabled()
-                            .frame(maxWidth: 220)
-                            .accessibilityIdentifier("reset.confirmation")
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("Reset to Factory replaces the whole Linux system with the one that comes with this version of LinPad. Try Repair System first: it fixes most problems and keeps everything.")
+                            .fixedSize(horizontal: false, vertical: true)
+                        choice(.keepFiles, title: "Keep my files", symbol: "folder.badge.person.crop",
+                               detail: "Keeps /root and /home: your projects, documents, downloads and settings files, and the iPad folders you added in Files. Removes the apps and packages you installed and every change outside /root and /home.")
+                        choice(.eraseEverything, title: "Erase everything", symbol: "trash",
+                               detail: "Deletes /root and /home and forgets the iPad folders you added. LinPad starts as if newly installed. The files inside those iPad folders stay on the iPad.")
+                        Text("LinPad closes now. Open it again to install the fresh system (a few minutes), then it starts as usual. Nothing changes until then.")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Type \(Self.confirmationWord) to confirm")
+                                .font(.callout.weight(.semibold))
+                            TextField(Self.confirmationWord, text: $confirmation)
+                                .textFieldStyle(.roundedBorder)
+                                .textInputAutocapitalization(.characters)
+                                .autocorrectionDisabled()
+                                .frame(maxWidth: 220)
+                                .accessibilityIdentifier("reset.confirmation")
+                        }
+                        Button(role: .destructive) {
+                            guard let mode else { return }
+                            isClosing = true
+                            service.resetToFactory(mode)
+                        } label: {
+                            Label(isClosing ? "Closing LinPad…" : "Reset and Close LinPad", systemImage: "arrow.counterclockwise")
+                                .frame(minWidth: 200)
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
+                        .disabled(mode == nil || !Self.isConfirmed(confirmation) || isClosing)
+                        .accessibilityIdentifier("reset.confirm")
                     }
-                    Button(role: .destructive) {
-                        guard let mode else { return }
-                        isClosing = true
-                        service.resetToFactory(mode)
-                    } label: {
-                        Label(isClosing ? "Closing LinPad…" : "Reset and Close LinPad", systemImage: "arrow.counterclockwise")
-                            .frame(minWidth: 200)
+                    .padding(24)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .navigationTitle("Reset to Factory")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") { dismiss() }
+                            .accessibilityIdentifier("reset.cancel")
                     }
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                    .disabled(mode == nil || !Self.isConfirmed(confirmation) || isClosing)
-                    .accessibilityIdentifier("reset.confirm")
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .navigationTitle("Reset to Factory")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .accessibilityIdentifier("reset.cancel")
                 }
             }
+            .frame(minWidth: 520, minHeight: 600)
+            .accessibilityIdentifier("desktop.factoryResetSheet")
         }
-        .frame(minWidth: 520, minHeight: 600)
-        .accessibilityIdentifier("desktop.factoryResetSheet")
     }
 
     private func choice(_ value: FactoryResetMode, title: String, symbol: String, detail: String) -> some View {

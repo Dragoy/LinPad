@@ -31,9 +31,9 @@ if [ $# -gt 0 ] && [ "$1" != "--" ]; then SHOT=$1; shift; fi
 ROOTFS=${ROOTFS:-/Volumes/ExternalHD/Dev/ipad-jit/rootfs-devtools-arm64.tar.gz}
 
 if [ -z "${NOBUILD:-}" ]; then
-    if ! xcodebuild -project iSH.xcodeproj -target iSH-ARM64 -configuration Release \
+    if ! xcodebuild -skipMacroValidation -project iSH.xcodeproj -target iSH-ARM64 -configuration Release \
             -sdk iphonesimulator ARCHS=arm64 ONLY_ACTIVE_ARCH=YES SYMROOT="$PWD/build-sim-vscode" \
-            IPHONEOS_DEPLOYMENT_TARGET=17.0 CODE_SIGNING_ALLOWED=NO \
+            IPHONEOS_DEPLOYMENT_TARGET=16.0 CODE_SIGNING_ALLOWED=NO \
             ${AUTOMATION:+SWIFT_ACTIVE_COMPILATION_CONDITIONS=DESKTOP_AUTOMATION} build > "$BUILD_LOG" 2>&1; then
         grep -E "^[^ ].*error:" "$BUILD_LOG" | sort -u | head -30
         echo "build failed, full log: $BUILD_LOG"

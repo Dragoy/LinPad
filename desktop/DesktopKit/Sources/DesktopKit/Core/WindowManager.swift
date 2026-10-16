@@ -1,17 +1,17 @@
 import SwiftUI
-import Observation
+import Perception
 import UIKit
 
 /// One top-level window. A class so each `WindowView` observes only its own window,
 /// which keeps a 120 Hz drag from invalidating every other window on the desktop.
-@Observable @MainActor
+@Perceptible @MainActor
 final class DesktopWindow: Identifiable {
     let id = UUID()
     let appID: String
     let symbol: String
     /// What the app was opened with; session restore reopens it with the same arguments.
     /// Apps may update them (`WindowHandle.setArgument`).
-    @ObservationIgnored var arguments: [String: String]
+    @PerceptionIgnored var arguments: [String: String]
     var title: String
     /// The free-floating frame; maximized and snapped windows return to it.
     var frame: CGRect
@@ -29,12 +29,12 @@ final class DesktopWindow: Identifiable {
     var isInteracting = false
 
     /// Built exactly once, so app state survives minimizing, workspace switches and re-renders.
-    @ObservationIgnored var content = AnyView(EmptyView())
+    @PerceptionIgnored var content = AnyView(EmptyView())
     /// Set when the app decides how to close (a Linux app may ask to save first);
     /// the app then closes the window itself.
-    @ObservationIgnored var onCloseRequest: (() -> Void)?
+    @PerceptionIgnored var onCloseRequest: (() -> Void)?
     /// The last picture of the window taken while nothing covered it (window switcher).
-    @ObservationIgnored var snapshot: UIImage?
+    @PerceptionIgnored var snapshot: UIImage?
 
     init(appID: String, symbol: String, title: String, arguments: [String: String] = [:],
          frame: CGRect, zIndex: Int, workspace: Int) {
@@ -87,7 +87,7 @@ struct TilingState: Codable, Equatable, Sendable {
     var masterRatio: CGFloat = 0.5
 }
 
-@Observable @MainActor
+@Perceptible @MainActor
 final class WindowManager {
     /// Workspaces a fresh desktop starts with; the user can add up to `maximumWorkspaces`.
     static let defaultWorkspaceCount = 4
@@ -148,24 +148,24 @@ final class WindowManager {
     /// Taskbar buttons in global coordinates, where minimized windows shrink to.
     var taskbarTargets: [UUID: CGRect] = [:]
     /// The desktop area's origin in global coordinates.
-    @ObservationIgnored var desktopGlobalOrigin: CGPoint = .zero
+    @PerceptionIgnored var desktopGlobalOrigin: CGPoint = .zero
 
     /// Called after any change worth persisting (session restore).
-    @ObservationIgnored var onLayoutChange: (() -> Void)?
+    @PerceptionIgnored var onLayoutChange: (() -> Void)?
     /// Called just before the focused window loses focus, while it is still on top.
-    @ObservationIgnored var willChangeFocus: ((DesktopWindow) -> Void)?
+    @PerceptionIgnored var willChangeFocus: ((DesktopWindow) -> Void)?
 
-    @ObservationIgnored private var topZIndex = 0
+    @PerceptionIgnored private var topZIndex = 0
     /// Most recently focused first; drives the window switcher.
-    @ObservationIgnored private var focusHistory: [UUID] = []
-    @ObservationIgnored private var pendingPlacements: [String: [WindowPlacement]] = [:]
+    @PerceptionIgnored private var focusHistory: [UUID] = []
+    @PerceptionIgnored private var pendingPlacements: [String: [WindowPlacement]] = [:]
     /// Tiling order across all workspaces; dragging one tile onto another swaps them here.
-    @ObservationIgnored private var tileOrder: [UUID] = []
+    @PerceptionIgnored private var tileOrder: [UUID] = []
     /// Called when a workspace's tiling settings change, to persist them.
-    @ObservationIgnored var onTilingChange: (([TilingState]) -> Void)?
+    @PerceptionIgnored var onTilingChange: (([TilingState]) -> Void)?
     /// Workspaces were deleted or reordered: maps each surviving old index to its new one,
     /// so per-workspace settings elsewhere (wallpapers) follow.
-    @ObservationIgnored var onWorkspacesRemapped: (([Int: Int]) -> Void)?
+    @PerceptionIgnored var onWorkspacesRemapped: (([Int: Int]) -> Void)?
 
     var focusedWindow: DesktopWindow? {
         focusedWindowID.flatMap(window(withID:))
