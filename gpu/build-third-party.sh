@@ -53,9 +53,9 @@ build_target() {
     case $t in
         macos)  slice=macos-arm64_x86_64; sdk=macosx; triple=arm64-apple-macos13.0
                 frameworks="-framework Metal -framework IOSurface -framework QuartzCore -framework CoreGraphics -framework Foundation -framework AppKit -framework IOKit" ;;
-        ios)    slice=ios-arm64; sdk=iphoneos; triple=arm64-apple-ios17.0
+        ios)    slice=ios-arm64; sdk=iphoneos; triple=arm64-apple-ios16.0
                 frameworks="-framework Metal -framework IOSurface -framework QuartzCore -framework CoreGraphics -framework Foundation -framework UIKit" ;;
-        iossim) slice=ios-arm64_x86_64-simulator; sdk=iphonesimulator; triple=arm64-apple-ios17.0-simulator
+        iossim) slice=ios-arm64_x86_64-simulator; sdk=iphonesimulator; triple=arm64-apple-ios16.0-simulator
                 frameworks="-framework Metal -framework IOSurface -framework QuartzCore -framework CoreGraphics -framework Foundation -framework UIKit" ;;
         *) echo "unknown target $t"; exit 1 ;;
     esac

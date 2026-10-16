@@ -82,6 +82,7 @@ final class ISHCameraBridge: NSObject, @unchecked Sendable {
             self.wanted[index] = nil
             if let capture = self.captures.removeValue(forKey: index) {
                 capture.session.stopRunning()
+                capture.stopFollowingOrientation()
                 self.log.info("camera \(index) off")
             }
         }
@@ -190,9 +191,10 @@ final class ISHCameraBridge: NSObject, @unchecked Sendable {
             guard let self, let session = note.object as? AVCaptureSession else { return }
             log.error("camera runtime error: \(String(describing: note.userInfo), privacy: .public)")
             sessionQueue.async {
-                guard let (index, _) = self.captures.first(where: { $0.value.session === session }) else { return }
+                guard let (index, capture) = self.captures.first(where: { $0.value.session === session }) else { return }
                 self.captures[index] = nil
                 session.stopRunning()
+                capture.stopFollowingOrientation()
                 self.startIfAllowed(index: index)
             }
         }
@@ -207,6 +209,8 @@ private final class Capture: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     var output: AVCaptureVideoDataOutput?
     var rotation: AnyObject? // AVCaptureDevice.RotationCoordinator, iOS 17+ only
     private var observation: NSKeyValueObservation?
+    /// Set on the main queue while iOS 16 orientation notifications are being generated
+    /// for this capture (`followDeviceOrientation`).
     private var orientationObserver: NSObjectProtocol?
 
     init(index: Int) {
@@ -214,8 +218,15 @@ private final class Capture: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         queue = DispatchQueue(label: "ishcamera.frames.\(index)")
     }
 
-    deinit {
-        if let orientationObserver { NotificationCenter.default.removeObserver(orientationObserver) }
+    /// Ends what `followDeviceOrientation` started, balancing its
+    /// beginGeneratingDeviceOrientationNotifications. Queued after it on the main queue.
+    func stopFollowingOrientation() {
+        DispatchQueue.main.async { [self] in
+            guard let observer = orientationObserver else { return }
+            orientationObserver = nil
+            NotificationCenter.default.removeObserver(observer)
+            UIDevice.current.endGeneratingDeviceOrientationNotifications()
+        }
     }
 
     /// Upright frames for the way the iPad is held; the kernel crops portrait frames to
@@ -259,9 +270,11 @@ private final class Capture: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
             self.queue.async { connection.videoOrientation = video }
         }
         DispatchQueue.main.async { [weak self] in
+            // The capture may have stopped before this ran: then there is nothing to follow.
+            guard let self else { return }
             UIDevice.current.beginGeneratingDeviceOrientationNotifications()
             apply()
-            self?.orientationObserver = NotificationCenter.default.addObserver(
+            orientationObserver = NotificationCenter.default.addObserver(
                 forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in apply() }
         }
     }
