@@ -16,7 +16,7 @@ public final class FastModeModel {
     public enum Method: Sendable {
         /// StikDebug (iPadOS 17.4+), with LocalDevVPN and a pairing file.
         case stikDebug
-        /// TrollStore 2.0.12+ (iPadOS 14 to 17.0), for a copy it installed.
+        /// TrollStore 2.0.12+ (iPadOS 14.0–16.6.1, 16.7 RC, 17.0), for a copy it installed.
         case trollStore
 
         public var helperName: String {
@@ -246,7 +246,7 @@ struct FastModeHelpText: View {
                 case .stikDebug:
                     Text("iPadOS only lets an app create native code while a debugger is attached to it. StikDebug, a separate app, provides that debugger on the iPad itself. Linux for iPad only asks it to attach; it does not include a debugger.")
                     VStack(alignment: .leading, spacing: 10) {
-                        step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions. StikDebug needs iPadOS 17.4 or later; on iPadOS 14 to 17.0, install Linux for iPad with TrollStore instead.")
+                        step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions. StikDebug needs iPadOS 17.4 or later; on iPadOS 14.0–16.6.1, 16.7 RC or 17.0, install Linux for iPad with TrollStore instead.")
                         step(2, "Connect LocalDevVPN.")
                         step(3, "With Settings › Fast mode on Automatic, Linux for iPad opens StikDebug when it starts, StikDebug attaches and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
                         step(4, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")

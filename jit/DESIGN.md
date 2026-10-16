@@ -304,7 +304,7 @@ invalidation generation moved meanwhile. Code writes use the RW view
   each request costs one debugger stop plus one packet per 16 KB page.
 * **Pre-TXM devices with `CS_DEBUGGED`**: mmap RW, remap, mprotect RX. Any
   debugger that attached once is enough, including **TrollStore** (2.0.12+,
-  iPadOS 14 to 17.0) for a copy it installed: the app opens
+  iPadOS 14.0–16.6.1, 16.7 RC (20H18), 17.0) for a copy it installed: the app opens
   `apple-magnifier://enable-jit?bundle-id=<id>` (TrollStore's "URL Scheme
   Enabled" setting must be on), TrollStore reopens it, `PT_ATTACHEXC`es,
   waits 100 ms and detaches. It services no breakpoints, so no `brk` may be

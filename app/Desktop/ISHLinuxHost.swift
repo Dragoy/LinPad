@@ -52,7 +52,7 @@ final class ISHLinuxHost: LinuxGraphicsHost, LinuxSystemPreparing, FastModeContr
         case .unpacking:
             preparation.update(phase: .unpacking, fraction: fraction, title: title, detail: detail)
         case .configuring:
-            // "Configuring…", or "Enabling fast mode via StikDebug…" while boot waits for it
+            // "Configuring…", or "Enabling fast mode via StikDebug…" (or TrollStore) while boot waits for it
             preparation.update(phase: .configuring, fraction: 1, title: title.isEmpty ? "Configuring…" : title,
                                detail: detail)
         case .running:

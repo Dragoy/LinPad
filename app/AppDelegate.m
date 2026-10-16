@@ -7,6 +7,7 @@
 
 #include <dlfcn.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <resolv.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -220,8 +221,8 @@ static const NSTimeInterval kGraceTaskBudget = 25;
 // this process. Normally that is the user-installed StikDebug (StikJIT INTEGRATION.md,
 // "Configure the JIT methods"), which runs universal.js where TXM is present; the JIT's
 // handshake (jit/codemem.c) then prepares the code region and detaches. An installation
-// made by TrollStore asks TrollStore instead (iPadOS 14 to 17.0, where StikDebug, 17.4+,
-// does not run).
+// made by TrollStore asks TrollStore instead (iPadOS 14.0–16.6.1, 16.7 RC and 17.0, where
+// StikDebug, 17.4+, does not run).
 
 NSString *const ISHFastModeSettingKey = @"fastMode.setting";
 static NSString *const kFastModeForceAttemptKey = @"fastMode.debugForceAttempt"; // testing: try without StikDebug installed
@@ -333,6 +334,22 @@ static NSString *FastModeHelperName(void) {
     return InstalledWithTrollStore() ? @"TrollStore" : @"StikDebug";
 }
 
+// TrollStore's CoreTrust bug covers iPadOS 14.0 to 16.6.1, 16.7 RC (20H18) and 17.0, not the
+// releases in between (TrollStore README). Only there is TrollStore worth recommending.
+static BOOL TrollStoreSupportsThisOS(void) {
+    NSOperatingSystemVersion v = NSProcessInfo.processInfo.operatingSystemVersion;
+    if (v.majorVersion == 14 || v.majorVersion == 15)
+        return YES;
+    if (v.majorVersion == 16) {
+        if (v.minorVersion < 6 || (v.minorVersion == 6 && v.patchVersion <= 1))
+            return YES;
+        char build[32] = "";
+        size_t len = sizeof(build);
+        return sysctlbyname("kern.osversion", build, &len, NULL, 0) == 0 && strcmp(build, "20H18") == 0;
+    }
+    return v.majorVersion == 17 && v.minorVersion == 0 && v.patchVersion == 0;
+}
+
 static BOOL JITDebugReady(void) {
     bool (*ready)(void) = JITSymbol("ish_jit_debug_ready");
     return ready != NULL && ready();
@@ -357,7 +374,9 @@ static NSString *FastModeUnavailableReason(void) {
         return @"This installation lacks the get-task-allow entitlement, so no debugger can attach. Install a development-signed build (Xcode, SideStore or iloader).";
     if (!StikDebugInstalled()) {
         if (![NSProcessInfo.processInfo isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){17, 4, 0}])
-            return @"StikDebug needs iPadOS 17.4 or later. On iPadOS 14 to 17.0, install LinPad with TrollStore to use fast mode.";
+            return TrollStoreSupportsThisOS()
+                ? @"StikDebug needs iPadOS 17.4 or later. TrollStore supports this iPadOS: install LinPad with TrollStore to use fast mode."
+                : @"StikDebug needs iPadOS 17.4 or later, and TrollStore does not support this iPadOS version, so fast mode is not available on this iPad.";
         return @"StikDebug is not installed.";
     }
     return nil;
@@ -725,7 +744,7 @@ void SyncHostname(void) {
         boot();
         return;
     }
-    SetBootState(ISHBootPhaseConfiguring, 1, @"Enabling fast mode via StikDebug…", @"");
+    SetBootState(ISHBootPhaseConfiguring, 1, [NSString stringWithFormat:@"Enabling fast mode via %@…", FastModeHelperName()], @"");
     RequestFastMode(NO, ^(BOOL on) {
         RecordBootStat(@"fast_mode", on ? @"on" : (fastModeMessage ?: @"off"));
         SetBootState(ISHBootPhaseConfiguring, 1, @"Configuring…", @"");

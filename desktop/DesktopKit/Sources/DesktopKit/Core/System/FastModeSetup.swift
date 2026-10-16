@@ -86,7 +86,7 @@ struct FastModeCheck: Identifiable, Equatable {
                                             : "The installation allows StikDebug to attach."))
             checks.append(FastModeCheck(id: "stikdebug", title: "StikDebug installed", state: stikDebugInstalled ? .ok : .missing,
                                         detail: stikDebugInstalled ? "LinPad opens it at launch to enable the JIT."
-                                            : "StikDebug is the on-device debugger that enables the JIT. Install it from stikdebug.xyz. It needs iPadOS 17.4 or later; on iPadOS 14 to 17.0, install LinPad with TrollStore instead."))
+                                            : "StikDebug is the on-device debugger that enables the JIT. Install it from stikdebug.xyz. It needs iPadOS 17.4 or later; on iPadOS 14.0–16.6.1, 16.7 RC or 17.0, install LinPad with TrollStore instead."))
             checks.append(FastModeCheck(id: "pairing", title: "StikDebug has a pairing file for this iPad", state: .manual,
                                         detail: "LinPad cannot see this. Make one on a computer (for example with iloader) and import it in StikDebug, then turn on Developer Mode."))
             checks.append(FastModeCheck(id: "localdevvpn", title: "LocalDevVPN installed", state: localDevVPNInstalled ? .ok : .missing,
