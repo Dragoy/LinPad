@@ -112,23 +112,34 @@ final class LinPadLinkTests: XCTestCase {
 
 final class FastModeCheckTests: XCTestCase {
     func testChecklist() {
-        let ready = FastModeCheck.evaluate(jitCompiledIn: true, isSimulator: false, hasGetTaskAllow: true, stikDebugInstalled: true,
-                                           localDevVPNInstalled: true, vpnLooksConnected: true, status: .on(newProgramsOnly: false),
-                                           engine: .nativeJIT)
+        let ready = FastModeCheck.evaluate(method: .stikDebug, jitCompiledIn: true, isSimulator: false, hasGetTaskAllow: true,
+                                           stikDebugInstalled: true, localDevVPNInstalled: true, vpnLooksConnected: true,
+                                           status: .on(newProgramsOnly: false), engine: .nativeJIT)
         XCTAssertEqual(ready.map(\.id), ["build", "get-task-allow", "stikdebug", "pairing", "localdevvpn", "vpn", "result"])
         XCTAssertEqual(ready.filter { $0.state == .missing }, [])
 
-        let fresh = FastModeCheck.evaluate(jitCompiledIn: true, isSimulator: false, hasGetTaskAllow: false, stikDebugInstalled: false,
-                                           localDevVPNInstalled: false, vpnLooksConnected: false, status: .failed("StikDebug did not open."),
-                                           engine: .compatibility)
+        let fresh = FastModeCheck.evaluate(method: .stikDebug, jitCompiledIn: true, isSimulator: false, hasGetTaskAllow: false,
+                                           stikDebugInstalled: false, localDevVPNInstalled: false, vpnLooksConnected: false,
+                                           status: .failed("StikDebug did not open."), engine: .compatibility)
         XCTAssertEqual(fresh.filter { $0.state == .missing }.map(\.id), ["get-task-allow", "stikdebug", "localdevvpn", "result"])
         XCTAssertEqual(fresh.first { $0.id == "vpn" }?.state, .info, "no VPN app: connecting is not the next step")
         XCTAssertEqual(fresh.last?.detail, "StikDebug did not open.")
 
-        let simulator = FastModeCheck.evaluate(jitCompiledIn: false, isSimulator: true, hasGetTaskAllow: nil, stikDebugInstalled: false,
-                                               localDevVPNInstalled: false, vpnLooksConnected: false, status: .idle, engine: nil)
+        let simulator = FastModeCheck.evaluate(method: .stikDebug, jitCompiledIn: false, isSimulator: true, hasGetTaskAllow: nil,
+                                               stikDebugInstalled: false, localDevVPNInstalled: false, vpnLooksConnected: false,
+                                               status: .idle, engine: nil)
         XCTAssertEqual(simulator.first?.state, .missing)
         XCTAssertTrue(simulator.contains { $0.id == "device" })
         XCTAssertEqual(simulator.first { $0.id == "get-task-allow" }?.state, .info)
+    }
+
+    /// A TrollStore install needs neither StikDebug nor LocalDevVPN, whatever is (not) installed.
+    func testTrollStoreChecklistSkipsStikDebugSetup() {
+        let checks = FastModeCheck.evaluate(method: .trollStore, jitCompiledIn: true, isSimulator: false, hasGetTaskAllow: false,
+                                            stikDebugInstalled: false, localDevVPNInstalled: false, vpnLooksConnected: false,
+                                            status: .enabling, engine: .compatibility)
+        XCTAssertEqual(checks.map(\.id), ["build", "trollstore", "get-task-allow", "url-scheme", "result"])
+        XCTAssertEqual(checks.filter { $0.state == .missing }.map(\.id), ["get-task-allow"])
+        XCTAssertEqual(checks.last?.detail, "Waiting for TrollStore…")
     }
 }

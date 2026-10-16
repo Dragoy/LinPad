@@ -14,7 +14,7 @@ struct OnboardingTour: View {
         ("themes", "Themes in one keystroke",
          "Tokyo Night, Catppuccin, Gruvbox and more recolour the desktop and the Linux apps together."),
         ("fast", "Fast mode",
-         "With StikDebug, LinPad runs Linux programs as native ARM64 code, about 5× faster than plain emulation."),
+         "With StikDebug or TrollStore, LinPad runs Linux programs as native ARM64 code, about 5× faster than plain emulation."),
         ("files", "Your files",
          "Open iPad folders and Photos from Files, and keep Linux's /root and /home on the iPad."),
     ]

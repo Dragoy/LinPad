@@ -1,9 +1,10 @@
 import Perception
 import SwiftUI
 
-/// Fast mode (the native JIT) as the host can request it: on iPadOS through the
-/// user-installed StikDebug app, which the host opens with its `stikdebug://enable-jit`
-/// URL. The desktop shows the state, the setting and a retry.
+/// Fast mode (the native JIT) as the host can request it on iPadOS: through the
+/// user-installed StikDebug app (`stikdebug://enable-jit`), or, for a copy TrollStore
+/// installed, through TrollStore (`apple-magnifier://enable-jit`). The desktop shows the
+/// state, the setting and a retry.
 @MainActor
 public protocol FastModeControlling: AnyObject {
     var fastMode: FastModeModel { get }
@@ -11,15 +12,30 @@ public protocol FastModeControlling: AnyObject {
 
 @Perceptible @MainActor
 public final class FastModeModel {
+    /// The app the host asks to attach a debugger, which is what lets iPadOS run the JIT's code.
+    public enum Method: Sendable {
+        /// StikDebug (iPadOS 17.4+), with LocalDevVPN and a pairing file.
+        case stikDebug
+        /// TrollStore 2.0.12+ (iPadOS 14 to 17.0), for a copy it installed.
+        case trollStore
+
+        public var helperName: String {
+            switch self {
+            case .stikDebug: "StikDebug"
+            case .trollStore: "TrollStore"
+            }
+        }
+    }
+
     public enum Setting: String, CaseIterable, Identifiable, Sendable {
-        /// Ask StikDebug at every launch, before Linux starts.
+        /// Ask the helper (StikDebug or TrollStore) at every launch, before Linux starts.
         case automatic
         case off
 
         public var id: String { rawValue }
         public var title: String {
             switch self {
-            case .automatic: "Automatic (StikDebug)"
+            case .automatic: "Automatic"
             case .off: "Off"
             }
         }
@@ -53,10 +69,13 @@ public final class FastModeModel {
     /// Why fast mode can't be requested here, or nil.
     public private(set) var unavailableReason: String?
     @PerceptionIgnored private let retryAction: @MainActor () -> Void
+    /// Fixed for the installation: TrollStore when it installed this copy.
+    public let method: Method
 
-    public init(retry: @escaping @MainActor () -> Void) {
+    public init(method: Method = .stikDebug, retry: @escaping @MainActor () -> Void) {
         setting = Setting(rawValue: UserDefaults.standard.string(forKey: Self.settingKey) ?? "") ?? .automatic
         codeCacheMB = UserDefaults.standard.integer(forKey: Self.codeCacheKey)
+        self.method = method
         retryAction = retry
     }
 
@@ -80,7 +99,7 @@ public final class FastModeModel {
     public var statusText: String {
         switch status {
         case .idle: unavailableReason ?? "Not enabled"
-        case .enabling: "Enabling via StikDebug…"
+        case .enabling: "Enabling via \(method.helperName)…"
         case .on(let newOnly): newOnly ? "On for programs started from now on" : "On"
         case .failed(let message): message
         }
@@ -187,8 +206,9 @@ struct PerformanceModeRow: View {
 }
 
 /// How to get the native JIT on an iPad: iOS only grants executable memory to an app a
-/// debugger is attached to, and StikDebug is that debugger on the device itself.
+/// debugger has attached to, and StikDebug or TrollStore attaches one on the device itself.
 struct FastModeHelpSheet: View {
+    let method: FastModeModel.Method
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
@@ -196,7 +216,7 @@ struct FastModeHelpSheet: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 16) {
-                        FastModeHelpText()
+                        FastModeHelpText(method: method)
                     }
                     .font(.system(size: 15))
                     .padding(24)
@@ -216,19 +236,33 @@ struct FastModeHelpSheet: View {
 
 /// The setup steps, shared by the help sheet and Settings.
 struct FastModeHelpText: View {
+    let method: FastModeModel.Method
+
     var body: some View {
         WithPerceptionTracking {
             VStack(alignment: .leading, spacing: 14) {
                 Text("Linux runs in Compatibility mode: every instruction is emulated. Fast mode translates Linux programs to native ARM64 code and makes them several times faster (about 5x on average).")
-                Text("iPadOS only lets an app create native code while a debugger is attached to it. StikDebug, a separate app, provides that debugger on the iPad itself. Linux for iPad only asks it to attach; it does not include a debugger.")
-                VStack(alignment: .leading, spacing: 10) {
-                    step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions.")
-                    step(2, "Connect LocalDevVPN.")
-                    step(3, "With Settings › Fast mode on Automatic, Linux for iPad opens StikDebug when it starts, StikDebug attaches and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
-                    step(4, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")
+                switch method {
+                case .stikDebug:
+                    Text("iPadOS only lets an app create native code while a debugger is attached to it. StikDebug, a separate app, provides that debugger on the iPad itself. Linux for iPad only asks it to attach; it does not include a debugger.")
+                    VStack(alignment: .leading, spacing: 10) {
+                        step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions. StikDebug needs iPadOS 17.4 or later; on iPadOS 14 to 17.0, install Linux for iPad with TrollStore instead.")
+                        step(2, "Connect LocalDevVPN.")
+                        step(3, "With Settings › Fast mode on Automatic, Linux for iPad opens StikDebug when it starts, StikDebug attaches and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
+                        step(4, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")
+                    }
+                    Text("You can also open StikDebug yourself and select “Linux for iPad” in its app list. Your files and Linux system are the same in both modes.")
+                        .foregroundStyle(.secondary)
+                case .trollStore:
+                    Text("iPadOS only lets an app create native code once a debugger has attached to it. TrollStore installed this copy of Linux for iPad, and it can attach that debugger itself: no StikDebug, VPN or pairing file.")
+                    VStack(alignment: .leading, spacing: 10) {
+                        step(1, "Once: in TrollStore › Settings, turn on “URL Scheme Enabled”. Without it, the request opens the Magnifier app instead of TrollStore.")
+                        step(2, "With Settings › Fast mode on Automatic, Linux for iPad asks TrollStore when it starts; TrollStore comes to the front, attaches for a moment and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
+                        step(3, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")
+                    }
+                    Text("You can also start Linux for iPad from TrollStore with “Open with JIT” (tap the app in TrollStore's list). On iPadOS 16, TrollStore asks to turn on Developer Mode for an app that can be debugged. Your files and Linux system are the same in both modes.")
+                        .foregroundStyle(.secondary)
                 }
-                Text("You can also open StikDebug yourself and select “Linux for iPad” in its app list. Your files and Linux system are the same in both modes.")
-                    .foregroundStyle(.secondary)
             }
         }
     }

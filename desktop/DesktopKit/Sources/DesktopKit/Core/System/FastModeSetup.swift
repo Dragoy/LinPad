@@ -66,9 +66,9 @@ struct FastModeCheck: Identifiable, Equatable {
     let detail: String
 
     /// The checklist from what LinPad can observe, in setup order.
-    static func evaluate(jitCompiledIn: Bool, isSimulator: Bool, hasGetTaskAllow: Bool?, stikDebugInstalled: Bool,
-                         localDevVPNInstalled: Bool, vpnLooksConnected: Bool, status: FastModeModel.Status,
-                         engine: LinuxSystemPreparation.CPUEngine?) -> [FastModeCheck] {
+    static func evaluate(method: FastModeModel.Method, jitCompiledIn: Bool, isSimulator: Bool, hasGetTaskAllow: Bool?,
+                         stikDebugInstalled: Bool, localDevVPNInstalled: Bool, vpnLooksConnected: Bool,
+                         status: FastModeModel.Status, engine: LinuxSystemPreparation.CPUEngine?) -> [FastModeCheck] {
         var checks: [FastModeCheck] = []
         checks.append(FastModeCheck(id: "build", title: "This build includes the native JIT",
                                     state: jitCompiledIn ? .ok : .missing,
@@ -78,31 +78,44 @@ struct FastModeCheck: Identifiable, Equatable {
                                         detail: "The simulator has no StikDebug. Fast mode needs a real iPad."))
         }
         let taskAllow: State = hasGetTaskAllow.map { $0 ? .ok : .missing } ?? .info
-        checks.append(FastModeCheck(id: "get-task-allow", title: "Signed so a debugger may attach (get-task-allow)", state: taskAllow,
-                                    detail: taskAllow == .missing
-                                        ? "Reinstall LinPad with SideStore, AltStore, iloader or Xcode: they sign with a development certificate that allows it."
-                                        : "The installation allows StikDebug to attach."))
-        checks.append(FastModeCheck(id: "stikdebug", title: "StikDebug installed", state: stikDebugInstalled ? .ok : .missing,
-                                    detail: stikDebugInstalled ? "LinPad opens it at launch to enable the JIT."
-                                        : "StikDebug is the on-device debugger that enables the JIT. Install it from stikdebug.xyz."))
-        checks.append(FastModeCheck(id: "pairing", title: "StikDebug has a pairing file for this iPad", state: .manual,
-                                    detail: "LinPad cannot see this. Make one on a computer (for example with iloader) and import it in StikDebug, then turn on Developer Mode."))
-        checks.append(FastModeCheck(id: "localdevvpn", title: "LocalDevVPN installed", state: localDevVPNInstalled ? .ok : .missing,
-                                    detail: localDevVPNInstalled ? "StikDebug reaches the iPad's debug service through it."
-                                        : "Install LocalDevVPN from the App Store; StikDebug needs it."))
-        checks.append(FastModeCheck(id: "vpn", title: "LocalDevVPN connected", state: vpnLooksConnected ? .ok : (localDevVPNInstalled ? .missing : .info),
-                                    detail: vpnLooksConnected ? "A LocalDevVPN tunnel (10.7.0.x) is up."
-                                        : "Connect it before testing; LinPad can open LocalDevVPN and come back."))
+        switch method {
+        case .stikDebug:
+            checks.append(FastModeCheck(id: "get-task-allow", title: "Signed so a debugger may attach (get-task-allow)", state: taskAllow,
+                                        detail: taskAllow == .missing
+                                            ? "Reinstall LinPad with SideStore, AltStore, iloader or Xcode: they sign with a development certificate that allows it."
+                                            : "The installation allows StikDebug to attach."))
+            checks.append(FastModeCheck(id: "stikdebug", title: "StikDebug installed", state: stikDebugInstalled ? .ok : .missing,
+                                        detail: stikDebugInstalled ? "LinPad opens it at launch to enable the JIT."
+                                            : "StikDebug is the on-device debugger that enables the JIT. Install it from stikdebug.xyz. It needs iPadOS 17.4 or later; on iPadOS 14 to 17.0, install LinPad with TrollStore instead."))
+            checks.append(FastModeCheck(id: "pairing", title: "StikDebug has a pairing file for this iPad", state: .manual,
+                                        detail: "LinPad cannot see this. Make one on a computer (for example with iloader) and import it in StikDebug, then turn on Developer Mode."))
+            checks.append(FastModeCheck(id: "localdevvpn", title: "LocalDevVPN installed", state: localDevVPNInstalled ? .ok : .missing,
+                                        detail: localDevVPNInstalled ? "StikDebug reaches the iPad's debug service through it."
+                                            : "Install LocalDevVPN from the App Store; StikDebug needs it."))
+            checks.append(FastModeCheck(id: "vpn", title: "LocalDevVPN connected", state: vpnLooksConnected ? .ok : (localDevVPNInstalled ? .missing : .info),
+                                        detail: vpnLooksConnected ? "A LocalDevVPN tunnel (10.7.0.x) is up."
+                                            : "Connect it before testing; LinPad can open LocalDevVPN and come back."))
+        case .trollStore:
+            checks.append(FastModeCheck(id: "trollstore", title: "Installed with TrollStore", state: .ok,
+                                        detail: "LinPad asks TrollStore to enable the JIT at launch; no StikDebug, VPN or pairing file is needed."))
+            checks.append(FastModeCheck(id: "get-task-allow", title: "Signed so a debugger may attach (get-task-allow)", state: taskAllow,
+                                        detail: taskAllow == .missing
+                                            ? "TrollStore keeps the entitlements of the IPA it installs. Install LinPad's release IPA, which has get-task-allow."
+                                            : "TrollStore may attach. On iPadOS 16 it asks to turn on Developer Mode for such an app."))
+            checks.append(FastModeCheck(id: "url-scheme", title: "TrollStore's URL scheme is on", state: .manual,
+                                        detail: "LinPad cannot see this. In TrollStore › Settings, turn on “URL Scheme Enabled”; without it the request opens the Magnifier app."))
+        }
+        let helper = method.helperName
         let last: (State, String) = {
             switch (engine, status) {
             case (.nativeJIT?, _): return (.ok, "Linux runs on the native JIT.")
             case (_, .on(let newOnly)): return (.ok, newOnly ? "On for programs started since." : "On.")
             case (_, .failed(let message)): return (.missing, message)
-            case (_, .enabling): return (.info, "Waiting for StikDebug…")
+            case (_, .enabling): return (.info, "Waiting for \(helper)…")
             default: return (.info, "Not tried at this launch.")
             }
         }()
-        checks.append(FastModeCheck(id: "result", title: "Last handoff to StikDebug", state: last.0, detail: last.1))
+        checks.append(FastModeCheck(id: "result", title: "Last handoff to \(helper)", state: last.0, detail: last.1))
         return checks
     }
 }
@@ -132,7 +145,7 @@ struct FastModeSetupSheet: View {
             NavigationStack {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("Fast mode runs Linux programs as native ARM64 code, about 5x faster. iPadOS allows that only while a debugger is attached, so LinPad asks StikDebug to attach at launch. Work down the list; each step has a button.")
+                        Text("Fast mode runs Linux programs as native ARM64 code, about 5x faster. iPadOS allows that only once a debugger has attached, so LinPad asks \(fastMode.method.helperName) to attach at launch. Work down the list; each step has a button where LinPad can help.")
                             .fixedSize(horizontal: false, vertical: true)
                         ForEach(checks) { check in row(check) }
                         Divider()
@@ -153,7 +166,7 @@ struct FastModeSetupSheet: View {
             }
             .frame(minWidth: 520, minHeight: 600)
             .onAppear(perform: refresh)
-            // Back from StikDebug, LocalDevVPN or the App Store.
+            // Back from StikDebug, TrollStore, LocalDevVPN or the App Store.
             .onChangeCompat(of: scenePhase) { _, phase in if phase == .active { refresh() } }
             .onChangeCompat(of: fastMode.status) { _, _ in refresh() }
             .accessibilityIdentifier("desktop.fastModeSetup")
@@ -167,6 +180,7 @@ struct FastModeSetupSheet: View {
         let simulator = false
         #endif
         checks = FastModeCheck.evaluate(
+            method: fastMode.method,
             jitCompiledIn: preparation?.jitCompiledIn ?? !(fastMode.unavailableReason?.contains("does not include") ?? false),
             isSimulator: simulator,
             hasGetTaskAllow: (controller?.host as? FastModeDiagnosing)?.hasGetTaskAllow,
@@ -228,7 +242,7 @@ struct FastModeSetupSheet: View {
     private var testSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("Test now").font(.headline)
-            Text("Asks StikDebug for the JIT (StikDebug comes to the front and returns), then times a shell loop in Linux.")
+            Text("Asks \(fastMode.method.helperName) for the JIT (it comes to the front and returns), then times a shell loop in Linux.")
                 .font(.caption).foregroundStyle(.secondary)
             HStack {
                 Button {
@@ -268,9 +282,9 @@ struct FastModeSetupSheet: View {
                     testState = .finished(success: false, summary: fastMode.unavailableReason ?? fastMode.statusText)
                     return
                 }
-                testState = .running("Waiting for StikDebug…")
+                testState = .running("Waiting for \(fastMode.method.helperName)…")
                 fastMode.retry()
-                // StikDebug is in front meanwhile; give up after two minutes.
+                // The helper is in front meanwhile; give up after two minutes.
                 for _ in 0..<480 {
                     try? await Task.sleep(for: .milliseconds(250))
                     if case .on = fastMode.status { break }

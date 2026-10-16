@@ -302,7 +302,18 @@ invalidation generation moved meanwhile. Code writes use the RW view
   universal protocol, which needs no name matching and allows later requests.
   One region is requested up front (default 128 MB, `ISH_JIT_CACHE_MB`);
   each request costs one debugger stop plus one packet per 16 KB page.
-* **Pre-TXM devices with `CS_DEBUGGED`**: mmap RW, remap, mprotect RX.
+* **Pre-TXM devices with `CS_DEBUGGED`**: mmap RW, remap, mprotect RX. Any
+  debugger that attached once is enough, including **TrollStore** (2.0.12+,
+  iPadOS 14 to 17.0) for a copy it installed: the app opens
+  `apple-magnifier://enable-jit?bundle-id=<id>` (TrollStore's "URL Scheme
+  Enabled" setting must be on), TrollStore reopens it, `PT_ATTACHEXC`es,
+  waits 100 ms and detaches. It services no breakpoints, so no `brk` may be
+  issued then; TrollStore never runs on TXM iOS, so this path never takes the
+  universal.js branch. The app recognises such an install by TrollStore's
+  marker file (`_TrollStore` / `_TrollStoreLite`) next to its bundle; the
+  release IPA carries `get-task-allow`, which TrollStore keeps and needs.
+  `dynamic-codesigning` is no alternative: TrollStore documents it as banned
+  on A12+ since iOS 15.
 * **Simulator**: dual mapping (the simulator is a macOS process). Tested in a
   private simulator with the CLI built for `arm64-apple-ios-simulator` and run
   with `simctl spawn`.

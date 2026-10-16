@@ -120,7 +120,7 @@ LinPad turns it into the computer the hardware already is.
 | Feature | Description |
 |---------|-------------|
 | **Native ARM64 JIT** | ≈4.8× faster than the threaded-code engine — `tsc` 5.4×, Node 12×, `vite build` 3.5× |
-| **Fast mode in one tap** | Hands off to [StikDebug](https://github.com/StikDebug/StikDebug) at launch and comes back with JIT enabled |
+| **Fast mode in one tap** | Hands off to [StikDebug](https://github.com/StikDebug/StikDebug) (iPadOS 17.4+) or, for a copy installed with [TrollStore](https://github.com/opa334/TrollStore) (iPadOS 14 to 17.0), to TrollStore at launch and comes back with JIT enabled |
 | **GPU acceleration** | Linux Vulkan & OpenGL ES on the Apple GPU (Venus → virglrenderer → MoltenVK → Metal) |
 | **Firefox** | Scrolling at 30–50 fps, URL bar in ~40 ms |
 
@@ -177,7 +177,7 @@ flowchart TB
 | **iPad** | Apple Silicon (M1 or newer) — developed on an iPad Air M3, iPadOS 27.2 |
 | **Mac** | Xcode, Homebrew `llvm lld meson ninja libarchive`, `libimobiledevice` |
 | **Account** | An Apple developer account (LinPad is sideloaded, not on the App Store) |
-| **Optional** | [StikDebug](https://github.com/StikDebug/StikDebug) + LocalDevVPN for fast mode |
+| **Optional** | [StikDebug](https://github.com/StikDebug/StikDebug) + LocalDevVPN for fast mode, or [TrollStore](https://github.com/opa334/TrollStore) 2.0.12+ with its URL scheme turned on |
 
 ```sh
 export PATH=/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:$PATH
