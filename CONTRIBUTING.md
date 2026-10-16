@@ -41,7 +41,7 @@ ISH_JIT=1 build/ish -f alpine-fakefs /bin/sh                                   #
 
 ```sh
 cd desktop/DesktopKit
-xcodebuild test -scheme DesktopKit -destination 'platform=iOS Simulator,name=<an iPad simulator>'
+xcodebuild test -skipMacroValidation -scheme DesktopKit -destination 'platform=iOS Simulator,name=<an iPad simulator>'
 ```
 
 `desktop/UXHarness/run-all.sh` runs the UI tests, one shard per desktop style.

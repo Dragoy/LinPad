@@ -46,12 +46,12 @@ summary=()
 for shard in "${SHARDS[@]}"; do
     log="$LOGS/$shard.log"
     if [ "$shard" = unit ]; then
-        (cd "$HERE/../DesktopKit" && run "$log" xcodebuild test -scheme DesktopKit -destination "$DESTINATION" \
+        (cd "$HERE/../DesktopKit" && run "$log" xcodebuild test -skipMacroValidation -scheme DesktopKit -destination "$DESTINATION" \
             -derivedDataPath "$DERIVED-unit")
     else
         cls=$(class_for "$shard")
         [ -z "$cls" ] && { echo "unknown shard: $shard"; exit 2; }
-        (cd "$HERE" && run "$log" xcodebuild test -project DesktopUX.xcodeproj -scheme DesktopHarness \
+        (cd "$HERE" && run "$log" xcodebuild test -skipMacroValidation -project DesktopUX.xcodeproj -scheme DesktopHarness \
             -destination "$DESTINATION" -derivedDataPath "$DERIVED" -only-testing:"DesktopUITests/$cls")
     fi
     # xcodebuild prints each result twice (runner and summary); count each test once.

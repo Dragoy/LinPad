@@ -137,7 +137,7 @@ jobs:
         env:
           SIM: ${{ steps.sim.outputs.udid }}
         run: |
-          xcodebuild test -scheme DesktopKit -destination "id=$SIM" \
+          xcodebuild test -skipMacroValidation -scheme DesktopKit -destination "id=$SIM" \
             -derivedDataPath "$RUNNER_TEMP/dd" -resultBundlePath "$RUNNER_TEMP/DesktopKit.xcresult" \
             CODE_SIGNING_ALLOWED=NO -quiet
 
