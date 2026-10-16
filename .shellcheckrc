@@ -12,3 +12,6 @@ disable=SC1007
 
 # Style variables are assigned with eval ("GTK_THEME_$VARIANT"), which shellcheck cannot see.
 disable=SC2154
+
+# `-nt` is not POSIX, but BusyBox ash supports it.
+disable=SC3013
