@@ -8,11 +8,12 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 ISH=${ISH:-$HERE/../../build-cpu/ish}
 FAKEFS=${FAKEFS:?set FAKEFS to the guest fakefs directory}
 OUT=${OUT:-/tmp/arm64-insn}
+TIMEOUT=$(command -v timeout || command -v gtimeout || true) # macOS has neither without coreutils
 CFLAGS="-O1 -march=armv8.2-a+fp16+aes -pthread"
 mkdir -p "$OUT"
 cc $CFLAGS -o "$OUT/$N-native" "$HERE/$N.c"
 "$OUT/$N-native" > "$OUT/$N-native.txt"
-timeout 900 "$ISH" -f "$FAKEFS" /bin/sh -c \
+${TIMEOUT:+"$TIMEOUT" 900} "$ISH" -f "$FAKEFS" /bin/sh -c \
     "mkdir -p /root/insn && cat > /root/insn/$N.c && cd /root/insn && gcc $CFLAGS -o $N $N.c && ./$N > $N-guest.txt" \
     < "$HERE/$N.c"
 if diff "$OUT/$N-native.txt" "$FAKEFS/data/root/insn/$N-guest.txt" > "$OUT/$N.diff"; then
