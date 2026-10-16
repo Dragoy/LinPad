@@ -1,6 +1,6 @@
 import EventKit
 import Foundation
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 import UserNotifications
@@ -228,7 +228,7 @@ final class LocalCalendarBackend: CalendarBackend {
 // MARK: - Store
 
 /// The calendar the panel popover, the Calendar app and the widgets share.
-@Observable @MainActor
+@Perceptible @MainActor
 final class CalendarStore {
     enum Access: Equatable {
         /// Not asked yet; local events until the user turns iPad calendars on.
@@ -251,11 +251,11 @@ final class CalendarStore {
     }
     private(set) var lastError: String?
 
-    @ObservationIgnored private var backend: any CalendarBackend
-    @ObservationIgnored private let eventStore: EKEventStore?
-    @ObservationIgnored private var changeObserver: NSObjectProtocol?
+    @PerceptionIgnored private var backend: any CalendarBackend
+    @PerceptionIgnored private let eventStore: EKEventStore?
+    @PerceptionIgnored private var changeObserver: NSObjectProtocol?
     /// Fetches by interval for the current revision; views ask for the same span many times.
-    @ObservationIgnored private var cache: [DateInterval: [CalendarEvent]] = [:]
+    @PerceptionIgnored private var cache: [DateInterval: [CalendarEvent]] = [:]
 
     init(bundle: Bundle = .main, local: LocalCalendarBackend? = nil) {
         let canAsk = bundle.object(forInfoDictionaryKey: Self.usageDescriptionKey) != nil
@@ -299,7 +299,12 @@ final class CalendarStore {
     /// Asks for full access once; afterwards only Settings can change the answer.
     func requestAccess() async {
         guard access == .notDetermined, let eventStore else { return }
-        let granted = (try? await eventStore.requestFullAccessToEvents()) ?? false
+        let granted: Bool
+        if #available(iOS 17, *) {
+            granted = (try? await eventStore.requestFullAccessToEvents()) ?? false
+        } else {
+            granted = (try? await eventStore.requestAccess(to: .event)) ?? false
+        }
         access = granted ? .granted : .denied
         if granted { backend = EventKitCalendarBackend(store: eventStore) }
         reload()

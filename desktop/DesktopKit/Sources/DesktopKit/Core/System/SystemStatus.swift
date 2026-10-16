@@ -1,5 +1,5 @@
 import Network
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -11,7 +11,7 @@ struct DesktopNotice: Identifiable, Equatable {
 
 /// Everything `notify` was asked to show, newest first, and do-not-disturb, which keeps the
 /// history but suppresses the pop-up toasts.
-@Observable @MainActor
+@Perceptible @MainActor
 final class NotificationCenterModel {
     static let doNotDisturbKey = "desktop.doNotDisturb"
     /// Omarchy keeps the last 10.
@@ -45,7 +45,7 @@ final class NotificationCenterModel {
 
 /// Battery, network, brightness and keyboard state for quick settings. Monitoring runs only
 /// while a panel showing it is on screen.
-@Observable @MainActor
+@Perceptible @MainActor
 final class SystemStatus {
     enum Network: Equatable {
         case offline
@@ -83,9 +83,9 @@ final class SystemStatus {
         didSet { if abs(UIScreen.main.brightness - brightness) > 0.001 { UIScreen.main.brightness = brightness } }
     }
 
-    @ObservationIgnored private var monitor: NWPathMonitor?
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var users = 0
+    @PerceptionIgnored private var monitor: NWPathMonitor?
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private var users = 0
 
     func start() {
         users += 1

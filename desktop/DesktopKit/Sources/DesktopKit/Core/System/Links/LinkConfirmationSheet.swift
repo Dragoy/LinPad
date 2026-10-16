@@ -1,8 +1,9 @@
+import Perception
 import SwiftUI
 
 /// Links the app was opened with, waiting for the desktop to ask about them. The host's
 /// scene delegate hands every URL here; links that arrive before the desktop exists wait.
-@Observable @MainActor
+@Perceptible @MainActor
 public final class LinPadLinkInbox {
     public static let shared = LinPadLinkInbox()
 
@@ -38,18 +39,20 @@ extension View {
 
 private struct LinPadLinkPresenter: ViewModifier {
     let controller: DesktopController
-    @Bindable private var inbox = LinPadLinkInbox.shared
+    @Perception.Bindable private var inbox = LinPadLinkInbox.shared
 
     func body(content: Content) -> some View {
-        content
-            .sheet(item: $inbox.pending) { pending in
-                LinkConfirmationSheet(link: pending.link, controller: controller)
-            }
-            .onChange(of: inbox.rejected) { _, url in
-                guard url != nil else { return }
-                controller.notify("That LinPad link is damaged or not supported by this version.")
-                inbox.rejected = nil
-            }
+        WithPerceptionTracking {
+            content
+                .sheet(item: inbox.binding(\.pending)) { pending in
+                    LinkConfirmationSheet(link: pending.link, controller: controller)
+                }
+                .onChangeCompat(of: inbox.rejected) { _, url in
+                    guard url != nil else { return }
+                    controller.notify("That LinPad link is damaged or not supported by this version.")
+                    inbox.rejected = nil
+                }
+        }
     }
 }
 
@@ -62,56 +65,58 @@ struct LinkConfirmationSheet: View {
     @State private var failure: String?
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: 16) {
-                Label(title, systemImage: symbol)
-                    .font(.title3.weight(.semibold))
-                Text(explanation)
-                    .fixedSize(horizontal: false, vertical: true)
-                if let detail {
-                    Text(detail)
-                        .font(.callout.monospaced())
-                        .foregroundStyle(.secondary)
-                        .textSelection(.enabled)
-                        .lineLimit(4)
-                        .padding(10)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
-                }
-                if case .importTheme(_, let toml) = link,
-                   let theme = ColorsToml.read(toml, id: ColorsToml.id(forName: "preview"), name: "Preview") {
-                    ThemePreviewCard(theme: theme, fallback: nil, showsNotification: false)
-                        .frame(height: 150)
-                        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                }
-                if let failure {
-                    Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
-                }
-                Spacer(minLength: 0)
-                HStack {
-                    Spacer()
-                    Button("Cancel", role: .cancel) { dismiss() }
-                        .keyboardShortcut(.cancelAction)
-                    Button {
-                        Task { await perform() }
-                    } label: {
-                        if isWorking { ProgressView().controlSize(.small) } else { Text(actionTitle) }
+        WithPerceptionTracking {
+            NavigationStack {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label(title, systemImage: symbol)
+                        .font(.title3.weight(.semibold))
+                    Text(explanation)
+                        .fixedSize(horizontal: false, vertical: true)
+                    if let detail {
+                        Text(detail)
+                            .font(.callout.monospaced())
+                            .foregroundStyle(.secondary)
+                            .textSelection(.enabled)
+                            .lineLimit(4)
+                            .padding(10)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(RoundedRectangle(cornerRadius: 8).fill(Color.primary.opacity(0.06)))
                     }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(isWorking)
-                    .accessibilityIdentifier("link.confirm")
+                    if case .importTheme(_, let toml) = link,
+                       let theme = ColorsToml.read(toml, id: ColorsToml.id(forName: "preview"), name: "Preview") {
+                        ThemePreviewCard(theme: theme, fallback: nil, showsNotification: false)
+                            .frame(height: 150)
+                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    if let failure {
+                        Label(failure, systemImage: "exclamationmark.triangle").foregroundStyle(.orange)
+                    }
+                    Spacer(minLength: 0)
+                    HStack {
+                        Spacer()
+                        Button("Cancel", role: .cancel) { dismiss() }
+                            .keyboardShortcut(.cancelAction)
+                        Button {
+                            Task { await perform() }
+                        } label: {
+                            if isWorking { ProgressView().controlSize(.small) } else { Text(actionTitle) }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(isWorking)
+                        .accessibilityIdentifier("link.confirm")
+                    }
                 }
+                .padding(24)
+                .navigationTitle("Open LinPad Link")
+                .navigationBarTitleDisplayMode(.inline)
             }
-            .padding(24)
-            .navigationTitle("Open LinPad Link")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .frame(minWidth: 420, minHeight: 320)
-        .accessibilityIdentifier("desktop.linkConfirmation")
-        .task {
-            let catalog = AppCatalogModel.shared(for: controller.host)
-            if case .installApp = link, !catalog.hasLoaded { await catalog.load() }
+            .frame(minWidth: 420, minHeight: 320)
+            .accessibilityIdentifier("desktop.linkConfirmation")
+            .task {
+                let catalog = AppCatalogModel.shared(for: controller.host)
+                if case .installApp = link, !catalog.hasLoaded { await catalog.load() }
+            }
         }
     }
 

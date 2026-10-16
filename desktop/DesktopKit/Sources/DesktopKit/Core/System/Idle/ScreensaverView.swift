@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// The full-screen screensaver: any tap, pointer movement or key press ends it.
 struct ScreensaverOverlay: View {
@@ -7,42 +8,49 @@ struct ScreensaverOverlay: View {
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        ScreensaverCanvas(style: ScreensaverStyle(rawValue: styleID) ?? .logo)
-            .ignoresSafeArea()
-            .contentShape(Rectangle())
-            .onTapGesture { controller.idle.dismissScreensaver() }
-            .onContinuousHover { _ in controller.idle.noteActivity() }
-            .focusable()
-            .focusEffectDisabled()
-            .focused($isFocused)
-            .onKeyPress { _ in
-                controller.idle.dismissScreensaver()
-                return .handled
-            }
-            .onAppear { isFocused = true }
-            .accessibilityElement()
-            .accessibilityLabel("Screensaver")
-            .accessibilityHint("Tap or press any key to return")
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("desktop.screensaver")
+        WithPerceptionTracking {
+            ScreensaverCanvas(style: ScreensaverStyle(rawValue: styleID) ?? .logo)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { controller.idle.dismissScreensaver() }
+                .onContinuousHover { _ in controller.idle.noteActivity() }
+                .focusableWithoutEffectCompat()
+                .focused($isFocused)
+                .anyKeyPressCompat(iOS16Active: true) {
+                    controller.idle.dismissScreensaver()
+                    return true
+                }
+                .onAppear { isFocused = true }
+                .accessibilityElement()
+                .accessibilityLabel("Screensaver")
+                .accessibilityHint("Tap or press any key to return")
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("desktop.screensaver")
+        }
     }
 }
 
 /// One screensaver look, at any size (Settings shows it small as a preview).
 struct ScreensaverCanvas: View {
     let style: ScreensaverStyle
+    /// Seconds between redraws of the animated styles. The full-screen screensaver is the
+    /// only thing animating, so it keeps 30 fps; the small Settings preview shares the main
+    /// thread with the whole desktop (see `IdleSettingsSection.previewInterval`).
+    var frameInterval: TimeInterval = 1.0 / 30
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        TimelineView(.animation(minimumInterval: style == .clock ? 1 : 1.0 / 30)) { context in
-            let time = context.date.timeIntervalSinceReferenceDate
-            GeometryReader { proxy in
-                ZStack {
-                    Color.black
-                    switch style {
-                    case .logo: LogoScreensaver(time: time, size: proxy.size, accent: theme.accent)
-                    case .matrix: MatrixScreensaver(time: time, accent: theme.accent)
-                    case .clock: ClockScreensaver(date: context.date, time: time, size: proxy.size, accent: theme.accent)
+        WithPerceptionTracking {
+            TimelineView(.animation(minimumInterval: style == .clock ? 1 : frameInterval)) { context in
+                let time = context.date.timeIntervalSinceReferenceDate
+                GeometryReader { proxy in
+                    ZStack {
+                        Color.black
+                        switch style {
+                        case .logo: LogoScreensaver(time: time, size: proxy.size, accent: theme.accent)
+                        case .matrix: MatrixScreensaver(time: time, accent: theme.accent)
+                        case .clock: ClockScreensaver(date: context.date, time: time, size: proxy.size, accent: theme.accent)
+                        }
                     }
                 }
             }
@@ -76,21 +84,23 @@ private struct LogoScreensaver: View {
     private static let cycle: TimeInterval = 9
 
     var body: some View {
-        let columns = Self.art.map(\.count).max() ?? 1
-        let fontSize = max(6, min(size.width * 0.62 / CGFloat(columns) / 0.6, 30))
-        let phase = time.truncatingRemainder(dividingBy: Self.cycle) / Self.cycle
-        let lines = Self.art.enumerated().map { row, line in
-            String(line.enumerated().map { column, character in
-                Self.render(character, row: row, column: column, columns: columns, phase: phase, time: time)
-            })
+        WithPerceptionTracking {
+            let columns = Self.art.map(\.count).max() ?? 1
+            let fontSize = max(6, min(size.width * 0.62 / CGFloat(columns) / 0.6, 30))
+            let phase = time.truncatingRemainder(dividingBy: Self.cycle) / Self.cycle
+            let lines = Self.art.enumerated().map { row, line in
+                String(line.enumerated().map { column, character in
+                    Self.render(character, row: row, column: column, columns: columns, phase: phase, time: time)
+                })
+            }
+            let block = Text(lines.joined(separator: "\n"))
+                .font(.system(size: fontSize, weight: .bold, design: .monospaced))
+                .foregroundStyle(LinearGradient(colors: [accent, accent.opacity(0.55)], startPoint: .top, endPoint: .bottom))
+                .shadow(color: accent.opacity(0.6), radius: fontSize * 0.4)
+                .fixedSize()
+            let content = CGSize(width: CGFloat(columns) * fontSize * 0.6, height: CGFloat(Self.art.count) * fontSize * 1.2)
+            block.position(ScreensaverCanvas.drift(time, in: size, content: content))
         }
-        let block = Text(lines.joined(separator: "\n"))
-            .font(.system(size: fontSize, weight: .bold, design: .monospaced))
-            .foregroundStyle(LinearGradient(colors: [accent, accent.opacity(0.55)], startPoint: .top, endPoint: .bottom))
-            .shadow(color: accent.opacity(0.6), radius: fontSize * 0.4)
-            .fixedSize()
-        let content = CGSize(width: CGFloat(columns) * fontSize * 0.6, height: CGFloat(Self.art.count) * fontSize * 1.2)
-        block.position(ScreensaverCanvas.drift(time, in: size, content: content))
     }
 
     /// Decodes left to right over the first 35% of the cycle, holds, and scrambles away
@@ -120,25 +130,27 @@ private struct MatrixScreensaver: View {
     private static let glyphs = Array("ｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄ0123456789LINPAD$#*+=<>")
 
     var body: some View {
-        Canvas { context, size in
-            let cell: CGFloat = max(10, min(size.width, size.height) / 40)
-            let columns = Int(size.width / cell) + 1
-            let rows = Int(size.height / cell) + 1
-            let trail = max(8, rows / 3)
-            for column in 0..<columns {
-                let speed = 6 + Double((column * 7919) % 9)
-                let offset = Double((column * 104_729) % 97)
-                let head = Int((time * speed + offset).truncatingRemainder(dividingBy: Double(rows + trail)))
-                for step in 0..<trail {
-                    let row = head - step
-                    guard row >= 0, row < rows else { continue }
-                    let seed = (column * 31 + row * 7 + Int(time * (step == 0 ? 12 : 3))) & 0x7FFF_FFFF
-                    let glyph = String(Self.glyphs[seed % Self.glyphs.count])
-                    let fade = 1 - Double(step) / Double(trail)
-                    let color = step == 0 ? Color.white : accent.opacity(fade * 0.9)
-                    context.draw(Text(glyph).font(.system(size: cell * 0.9, weight: .medium, design: .monospaced))
-                                    .foregroundStyle(color),
-                                 at: CGPoint(x: CGFloat(column) * cell + cell / 2, y: CGFloat(row) * cell + cell / 2))
+        WithPerceptionTracking {
+            Canvas { context, size in
+                let cell: CGFloat = max(10, min(size.width, size.height) / 40)
+                let columns = Int(size.width / cell) + 1
+                let rows = Int(size.height / cell) + 1
+                let trail = max(8, rows / 3)
+                for column in 0..<columns {
+                    let speed = 6 + Double((column * 7919) % 9)
+                    let offset = Double((column * 104_729) % 97)
+                    let head = Int((time * speed + offset).truncatingRemainder(dividingBy: Double(rows + trail)))
+                    for step in 0..<trail {
+                        let row = head - step
+                        guard row >= 0, row < rows else { continue }
+                        let seed = (column * 31 + row * 7 + Int(time * (step == 0 ? 12 : 3))) & 0x7FFF_FFFF
+                        let glyph = String(Self.glyphs[seed % Self.glyphs.count])
+                        let fade = 1 - Double(step) / Double(trail)
+                        let color = step == 0 ? Color.white : accent.opacity(fade * 0.9)
+                        context.draw(Text(glyph).font(.system(size: cell * 0.9, weight: .medium, design: .monospaced))
+                                        .foregroundColor(color),
+                                     at: CGPoint(x: CGFloat(column) * cell + cell / 2, y: CGFloat(row) * cell + cell / 2))
+                    }
                 }
             }
         }
@@ -152,17 +164,19 @@ private struct ClockScreensaver: View {
     let accent: Color
 
     var body: some View {
-        let fontSize = max(18, min(size.width, size.height) * 0.22)
-        VStack(spacing: fontSize * 0.08) {
-            Text(date.formatted(date: .omitted, time: .shortened))
-                .font(.system(size: fontSize, weight: .thin, design: .monospaced).monospacedDigit())
-                .foregroundStyle(.white)
-            Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
-                .font(.system(size: fontSize * 0.18, weight: .regular))
-                .foregroundStyle(accent)
+        WithPerceptionTracking {
+            let fontSize = max(18, min(size.width, size.height) * 0.22)
+            VStack(spacing: fontSize * 0.08) {
+                Text(date.formatted(date: .omitted, time: .shortened))
+                    .font(.system(size: fontSize, weight: .thin, design: .monospaced).monospacedDigit())
+                    .foregroundStyle(.white)
+                Text(date.formatted(.dateTime.weekday(.wide).day().month(.wide)))
+                    .font(.system(size: fontSize * 0.18, weight: .regular))
+                    .foregroundStyle(accent)
+            }
+            .fixedSize()
+            .position(ScreensaverCanvas.drift(time, in: size, content: CGSize(width: fontSize * 3, height: fontSize * 1.4)))
         }
-        .fixedSize()
-        .position(ScreensaverCanvas.drift(time, in: size, content: CGSize(width: fontSize * 3, height: fontSize * 1.4)))
     }
 }
 
@@ -175,50 +189,60 @@ struct IdleSettingsSection: View {
     @AppStorage(IdleSettings.lockMinutesKey) private var lockMinutes = 0
     @AppStorage(IdleSettings.keepAwakeKey) private var keepAwake = false
 
+    /// The animated preview sits in Settings' non-lazy VStack, so it redraws whether or not it
+    /// is scrolled into view. On the iOS 16.4 simulator the 30 fps logo preview alone held the
+    /// main thread at ~60% CPU with Settings open (a 1 Hz style: ~9%), which starved the rest
+    /// of the window. iOS 16 therefore redraws it six times a second; iOS 17+ keeps 30 fps.
+    private var previewInterval: TimeInterval {
+        if #available(iOS 17, *) { 1.0 / 30 } else { 1.0 / 6 }
+    }
+
     var body: some View {
-        SettingsSection(title: "Screensaver & Lock", symbol: "sparkles.tv") {
-            HStack(alignment: .top, spacing: 16) {
-                ScreensaverCanvas(style: ScreensaverStyle(rawValue: styleID) ?? .logo)
-                    .frame(width: 200, height: 125)
-                    .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                    .accessibilityIdentifier("settings.screensaver.preview")
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("Screensaver", selection: $styleID) {
-                        ForEach(ScreensaverStyle.allCases) { Text($0.title).tag($0.rawValue) }
+        WithPerceptionTracking {
+            SettingsSection(title: "Screensaver & Lock", symbol: "sparkles.tv") {
+                HStack(alignment: .top, spacing: 16) {
+                    ScreensaverCanvas(style: ScreensaverStyle(rawValue: styleID) ?? .logo, frameInterval: previewInterval)
+                        .frame(width: 200, height: 125)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .accessibilityIdentifier("settings.screensaver.preview")
+                    VStack(alignment: .leading, spacing: 10) {
+                        Picker("Screensaver", selection: $styleID) {
+                            ForEach(ScreensaverStyle.allCases) { Text($0.title).tag($0.rawValue) }
+                        }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("settings.screensaver.style")
+                        if let controller {
+                            Button("Preview Full Screen") { controller.idle.showScreensaver() }
+                                .foregroundStyle(theme.accent)
+                                .accessibilityIdentifier("settings.screensaver.preview.start")
+                        }
                     }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("settings.screensaver.style")
-                    if let controller {
-                        Button("Preview Full Screen") { controller.idle.showScreensaver() }
-                            .foregroundStyle(theme.accent)
-                            .accessibilityIdentifier("settings.screensaver.preview.start")
+                }
+                SettingsRow(title: "Start screensaver after") {
+                    Picker("Start screensaver after", selection: $screensaverMinutes) {
+                        ForEach(IdleSettings.screensaverChoices, id: \.self) { Text(IdleSettings.title(minutes: $0)).tag($0) }
                     }
-                }
-            }
-            SettingsRow(title: "Start screensaver after") {
-                Picker("Start screensaver after", selection: $screensaverMinutes) {
-                    ForEach(IdleSettings.screensaverChoices, id: \.self) { Text(IdleSettings.title(minutes: $0)).tag($0) }
-                }
-                .labelsHidden()
-                .accessibilityIdentifier("settings.screensaver.after")
-            }
-            SettingsRow(title: "Lock screen after") {
-                Picker("Lock screen after", selection: $lockMinutes) {
-                    ForEach(IdleSettings.lockChoices, id: \.self) { Text(IdleSettings.title(minutes: $0)).tag($0) }
-                }
-                .labelsHidden()
-                .accessibilityIdentifier("settings.autoLock.after")
-            }
-            SettingsRow(title: "Keep awake") {
-                Toggle("Keep awake", isOn: $keepAwake)
                     .labelsHidden()
-                    .tint(theme.accent)
-                    .accessibilityIdentifier("settings.keepAwake")
+                    .accessibilityIdentifier("settings.screensaver.after")
+                }
+                SettingsRow(title: "Lock screen after") {
+                    Picker("Lock screen after", selection: $lockMinutes) {
+                        ForEach(IdleSettings.lockChoices, id: \.self) { Text(IdleSettings.title(minutes: $0)).tag($0) }
+                    }
+                    .labelsHidden()
+                    .accessibilityIdentifier("settings.autoLock.after")
+                }
+                SettingsRow(title: "Keep awake") {
+                    Toggle("Keep awake", isOn: $keepAwake)
+                        .labelsHidden()
+                        .tint(theme.accent)
+                        .accessibilityIdentifier("settings.keepAwake")
+                }
+                Text("Idle means no touch, click or key press. Nothing starts during a screen recording or while a maximized window plays a video, or while Keep Awake is on. The iPad's own Auto-Lock still applies.")
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            Text("Idle means no touch, click or key press. Nothing starts during a screen recording or while a maximized window plays a video, or while Keep Awake is on. The iPad's own Auto-Lock still applies.")
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

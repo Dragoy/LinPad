@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Where a style puts its quick-settings and notification panels.
 extension DesktopStyle {
@@ -45,76 +46,78 @@ struct SystemTrayButtons: View {
     private var status: SystemStatus { controller.systemStatus }
 
     var body: some View {
-        HStack(spacing: 2) {
-            if controller.isRecordingScreen {
-                Button { controller.stopScreenRecording() } label: {
-                    ThemeGlyph(symbol: "record.circle.fill", size: 13)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(theme.urgent)
-                        .symbolEffect(.pulse)
-                        .frame(width: 30, height: 28)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .accessibilityLabel("Stop Screen Recording")
-                .accessibilityIdentifier("desktop.panel.recording")
-            }
-            if controller.showsKeyboardButton {
-                let keyboard = OnScreenKeyboard.shared
-                Button { keyboard.toggle(for: controller) } label: {
-                    ThemeGlyph(symbol: keyboard.isVisible ? "keyboard.chevron.compact.down" : "keyboard", size: 12)
-                        .font(.system(size: 12, weight: .semibold))
-                        .frame(width: 32, height: 28)
-                        .background(PanelItemBackground(isActive: keyboard.isVisible))
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .accessibilityLabel(keyboard.isVisible ? "Hide Keyboard" : "Show Keyboard")
-                .accessibilityIdentifier("desktop.panel.keyboard")
-            }
-            Button { controller.toggleQuickSettings() } label: {
-                HStack(spacing: 6) {
-                    ThemeGlyph(symbol: status.network.symbol, size: 12)
-                    if let volume = controller.systemControls?.volume {
-                        ThemeGlyph(symbol: volumeSymbol(volume), size: 12)
+        WithPerceptionTracking {
+            HStack(spacing: 2) {
+                if controller.isRecordingScreen {
+                    Button { controller.stopScreenRecording() } label: {
+                        ThemeGlyph(symbol: "record.circle.fill", size: 13)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(theme.urgent)
+                            .symbolPulseCompat()
+                            .frame(width: 30, height: 28)
+                            .contentShape(Rectangle())
                     }
-                    ThemeGlyph(symbol: status.batterySymbol, size: 12)
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Stop Screen Recording")
+                    .accessibilityIdentifier("desktop.panel.recording")
                 }
-                .font(.system(size: 12, weight: .semibold))
-                .padding(.horizontal, 8)
-                .frame(height: 28)
-                .background(PanelItemBackground(isActive: controller.isQuickSettingsPresented))
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .hoverEffect(.highlight)
-            .accessibilityLabel(controller.style.quickSettingsTitle)
-            .accessibilityIdentifier("desktop.panel.quickSettings")
-
-            Button { controller.toggleNotificationCenter() } label: {
-                ThemeGlyph(symbol: controller.notifications.doNotDisturb ? "moon.fill" : "bell", size: 12)
-                    .font(.system(size: 12, weight: .semibold))
-                    .frame(width: 30, height: 28)
-                    .background(PanelItemBackground(isActive: controller.isNotificationCenterPresented))
-                    .overlay(alignment: .topTrailing) {
-                        if controller.notifications.unreadCount > 0 {
-                            Circle().fill(Color(red: 0.96, green: 0.25, blue: 0.25)).frame(width: 7, height: 7)
-                                .offset(x: -4, y: 4)
+                if controller.showsKeyboardButton {
+                    let keyboard = OnScreenKeyboard.shared
+                    Button { keyboard.toggle(for: controller) } label: {
+                        ThemeGlyph(symbol: keyboard.isVisible ? "keyboard.chevron.compact.down" : "keyboard", size: 12)
+                            .font(.system(size: 12, weight: .semibold))
+                            .frame(width: 32, height: 28)
+                            .background(PanelItemBackground(isActive: keyboard.isVisible))
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel(keyboard.isVisible ? "Hide Keyboard" : "Show Keyboard")
+                    .accessibilityIdentifier("desktop.panel.keyboard")
+                }
+                Button { controller.toggleQuickSettings() } label: {
+                    HStack(spacing: 6) {
+                        ThemeGlyph(symbol: status.network.symbol, size: 12)
+                        if let volume = controller.systemControls?.volume {
+                            ThemeGlyph(symbol: volumeSymbol(volume), size: 12)
                         }
+                        ThemeGlyph(symbol: status.batterySymbol, size: 12)
                     }
+                    .font(.system(size: 12, weight: .semibold))
+                    .padding(.horizontal, 8)
+                    .frame(height: 28)
+                    .background(PanelItemBackground(isActive: controller.isQuickSettingsPresented))
                     .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel(controller.style.quickSettingsTitle)
+                .accessibilityIdentifier("desktop.panel.quickSettings")
+
+                Button { controller.toggleNotificationCenter() } label: {
+                    ThemeGlyph(symbol: controller.notifications.doNotDisturb ? "moon.fill" : "bell", size: 12)
+                        .font(.system(size: 12, weight: .semibold))
+                        .frame(width: 30, height: 28)
+                        .background(PanelItemBackground(isActive: controller.isNotificationCenterPresented))
+                        .overlay(alignment: .topTrailing) {
+                            if controller.notifications.unreadCount > 0 {
+                                Circle().fill(Color(red: 0.96, green: 0.25, blue: 0.25)).frame(width: 7, height: 7)
+                                    .offset(x: -4, y: 4)
+                            }
+                        }
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .accessibilityLabel("Notifications")
+                .accessibilityValue(controller.notifications.unreadCount > 0 ? "\(controller.notifications.unreadCount) unread" : "")
+                .accessibilityIdentifier("desktop.panel.notifications")
             }
-            .buttonStyle(.plain)
-            .hoverEffect(.highlight)
-            .accessibilityLabel("Notifications")
-            .accessibilityValue(controller.notifications.unreadCount > 0 ? "\(controller.notifications.unreadCount) unread" : "")
-            .accessibilityIdentifier("desktop.panel.notifications")
+            .foregroundStyle(theme.primaryText)
+            .onAppear { status.start() }
+            .onDisappear { status.stop() }
         }
-        .foregroundStyle(theme.primaryText)
-        .onAppear { status.start() }
-        .onDisappear { status.stop() }
     }
 
     private func volumeSymbol(_ volume: Float) -> String {
@@ -137,106 +140,108 @@ struct QuickSettingsPanel: View {
     private var tileRadius: CGFloat { style == .kylin ? 8 : theme.cornerRadius }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: style == .kylin ? 4 : 3),
-                      spacing: 8) {
-                tile("Do Not Disturb", symbol: "moon.fill", isOn: controller.notifications.doNotDisturb) {
-                    controller.notifications.doNotDisturb.toggle()
-                }
-                tile("Auto-Tiling", symbol: "rectangle.split.2x1", isOn: manager.isTiling(workspace: manager.currentWorkspace)) {
-                    manager.setTiling(!manager.isTiling(workspace: manager.currentWorkspace))
-                }
-                tile(appearanceTitle, symbol: "circle.lefthalf.filled", isOn: appearanceID != DesktopAppearance.styleDefault.rawValue) {
-                    cycleAppearance()
-                }
-                tile("Dark Mode", symbol: controller.isDarkAppearance ? "moon.stars.fill" : "sun.max.fill",
-                     isOn: controller.isDarkAppearance) {
-                    controller.setDarkMode(!controller.isDarkAppearance)
-                }
-                .contextMenu {
-                    Button("Light & Dark Settings…", systemImage: "circle.lefthalf.filled") {
-                        controller.openLightAndDarkSettings()
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 14) {
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: style == .kylin ? 4 : 3),
+                          spacing: 8) {
+                    tile("Do Not Disturb", symbol: "moon.fill", isOn: controller.notifications.doNotDisturb) {
+                        controller.notifications.doNotDisturb.toggle()
                     }
-                }
-                .accessibilityIdentifier("quickSettings.darkMode")
-                tile("Performance", symbol: "speedometer", isOn: showsPerformance) { showsPerformance.toggle() }
-                tile(status.network.title, symbol: status.network.symbol, isOn: status.network != .offline) {}
-                    .allowsHitTesting(false)
-                if style == .kylin {
-                    tile("Lock", symbol: "lock.fill", isOn: false) { controller.lockScreen() }
-                }
-            }
-            NowPlayingCard(center: controller.nowPlaying)
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
-                    .fill(theme.primaryText.opacity(0.08)))
-            if controller.systemControls?.volume != nil {
-                sliderRow(symbol: "speaker.wave.2.fill", label: "Volume", value: Binding(
-                    get: { Double(volume) },
-                    set: { value in
-                        volume = Float(value)
-                        controller.systemControls?.volume = Float(value)
-                        controller.systemControls?.isMuted = value == 0
-                    }))
-            }
-            sliderRow(symbol: "sun.max.fill", label: "Brightness", value: Binding(
-                get: { Double(status.brightness) },
-                set: { status.brightness = CGFloat($0) }))
-            Divider().overlay(theme.separator)
-            infoRow(symbol: "paintpalette", title: "Style") {
-                Picker("Style", selection: $styleID) {
-                    ForEach(DesktopStyle.groups) { group in
-                        Section(group.title) {
-                            ForEach(group.styles) { Text($0.displayName).tag($0.rawValue) }
+                    tile("Auto-Tiling", symbol: "rectangle.split.2x1", isOn: manager.isTiling(workspace: manager.currentWorkspace)) {
+                        manager.setTiling(!manager.isTiling(workspace: manager.currentWorkspace))
+                    }
+                    tile(appearanceTitle, symbol: "circle.lefthalf.filled", isOn: appearanceID != DesktopAppearance.styleDefault.rawValue) {
+                        cycleAppearance()
+                    }
+                    tile("Dark Mode", symbol: controller.isDarkAppearance ? "moon.stars.fill" : "sun.max.fill",
+                         isOn: controller.isDarkAppearance) {
+                        controller.setDarkMode(!controller.isDarkAppearance)
+                    }
+                    .contextMenu {
+                        Button("Light & Dark Settings…", systemImage: "circle.lefthalf.filled") {
+                            controller.openLightAndDarkSettings()
                         }
                     }
+                    .accessibilityIdentifier("quickSettings.darkMode")
+                    tile("Performance", symbol: "speedometer", isOn: showsPerformance) { showsPerformance.toggle() }
+                    tile(status.network.title, symbol: status.network.symbol, isOn: status.network != .offline) {}
+                        .allowsHitTesting(false)
+                    if style == .kylin {
+                        tile("Lock", symbol: "lock.fill", isOn: false) { controller.lockScreen() }
+                    }
                 }
-                .pickerStyle(.menu)
-                .accessibilityIdentifier("quickSettings.style")
-            }
-            PerformanceModeRow(controller: controller)
-            UpdateStatusRow(service: controller.updates)
-            infoRow(symbol: "keyboard", title: "Keyboard") {
-                Button(status.keyboardLanguage ?? "Hardware keyboard") {
-                    if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                NowPlayingCard(center: controller.nowPlaying)
+                    .padding(10)
+                    .background(RoundedRectangle(cornerRadius: tileRadius, style: .continuous)
+                        .fill(theme.primaryText.opacity(0.08)))
+                if controller.systemControls?.volume != nil {
+                    sliderRow(symbol: "speaker.wave.2.fill", label: "Volume", value: Binding(
+                        get: { Double(volume) },
+                        set: { value in
+                            volume = Float(value)
+                            controller.systemControls?.volume = Float(value)
+                            controller.systemControls?.isMuted = value == 0
+                        }))
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(theme.accent)
-            }
-            HStack {
-                ThemedLabel(batteryText, systemImage: status.batterySymbol, points: 16)
-                    .font(.system(size: 13))
-                Spacer()
-                Menu {
-                    PowerMenuItems(controller: controller)
-                } label: {
-                    ThemeGlyph(symbol: "power", size: 15).frame(width: 32, height: 32)
+                sliderRow(symbol: "sun.max.fill", label: "Brightness", value: Binding(
+                    tracking: { Double(status.brightness) },
+                    set: { status.brightness = CGFloat($0) }))
+                Divider().overlay(theme.separator)
+                infoRow(symbol: "paintpalette", title: "Style") {
+                    Picker("Style", selection: $styleID) {
+                        ForEach(DesktopStyle.groups) { group in
+                            Section(group.title) {
+                                ForEach(group.styles) { Text($0.displayName).tag($0.rawValue) }
+                            }
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("quickSettings.style")
                 }
-                .menuStyle(.button)
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .accessibilityLabel("Power")
-                .accessibilityIdentifier("quickSettings.power")
+                PerformanceModeRow(controller: controller)
+                UpdateStatusRow(service: controller.updates)
+                infoRow(symbol: "keyboard", title: "Keyboard") {
+                    Button(status.keyboardLanguage ?? "Hardware keyboard") {
+                        if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(theme.accent)
+                }
+                HStack {
+                    ThemedLabel(batteryText, systemImage: status.batterySymbol, points: 16)
+                        .font(.system(size: 13))
+                    Spacer()
+                    Menu {
+                        PowerMenuItems(controller: controller)
+                    } label: {
+                        ThemeGlyph(symbol: "power", size: 15).frame(width: 32, height: 32)
+                    }
+                    .menuStyle(.button)
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Power")
+                    .accessibilityIdentifier("quickSettings.power")
+                }
             }
+            .foregroundStyle(theme.primaryText)
+            .padding(16)
+            .frame(width: style == .kylin ? 396 : 340)
+            .background {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.panelBackground)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
+            .onAppear {
+                volume = controller.systemControls?.volume ?? 1
+                status.start()
+            }
+            .onDisappear { status.stop() }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.quickSettings")
         }
-        .foregroundStyle(theme.primaryText)
-        .padding(16)
-        .frame(width: style == .kylin ? 396 : 340)
-        .background {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.panelBackground)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
-        .onAppear {
-            volume = controller.systemControls?.volume ?? 1
-            status.start()
-        }
-        .onDisappear { status.stop() }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.quickSettings")
     }
 
     private var appearanceTitle: String {
@@ -298,54 +303,56 @@ struct NotificationCenterPanel: View {
     private var notifications: NotificationCenterModel { controller.notifications }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Notifications").font(.system(size: 15, weight: .semibold))
-                Spacer()
-                Toggle(isOn: Binding(get: { notifications.doNotDisturb }, set: { notifications.doNotDisturb = $0 })) {
-                    Label("Do Not Disturb", systemImage: "moon.fill").labelStyle(.iconOnly)
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text("Notifications").font(.system(size: 15, weight: .semibold))
+                    Spacer()
+                    Toggle(isOn: Binding(tracking: { notifications.doNotDisturb }, set: { notifications.doNotDisturb = $0 })) {
+                        Label("Do Not Disturb", systemImage: "moon.fill").labelStyle(.iconOnly)
+                    }
+                    .toggleStyle(.button)
+                    .tint(theme.accent)
+                    .accessibilityIdentifier("notifications.doNotDisturb")
+                    if !notifications.notices.isEmpty {
+                        Button("Clear All") { withAnimation(DesktopMotion.quick) { notifications.clear() } }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(theme.accent)
+                            .font(.system(size: 13))
+                    }
                 }
-                .toggleStyle(.button)
-                .tint(theme.accent)
-                .accessibilityIdentifier("notifications.doNotDisturb")
-                if !notifications.notices.isEmpty {
-                    Button("Clear All") { withAnimation(DesktopMotion.quick) { notifications.clear() } }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(theme.accent)
+                UpdateStatusRow(service: controller.updates)
+                if notifications.notices.isEmpty {
+                    Text("No notifications")
                         .font(.system(size: 13))
-                }
-            }
-            UpdateStatusRow(service: controller.updates)
-            if notifications.notices.isEmpty {
-                Text("No notifications")
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.secondaryText)
-                    .frame(maxWidth: .infinity, minHeight: 80)
-            } else {
-                ScrollView {
-                    LazyVStack(spacing: 8) {
-                        ForEach(notifications.notices) { notice in
-                            noticeCard(notice)
+                        .foregroundStyle(theme.secondaryText)
+                        .frame(maxWidth: .infinity, minHeight: 80)
+                } else {
+                    ScrollView {
+                        LazyVStack(spacing: 8) {
+                            ForEach(notifications.notices) { notice in
+                                noticeCard(notice)
+                            }
                         }
                     }
                 }
+                if isColumn { Spacer(minLength: 0) }
             }
-            if isColumn { Spacer(minLength: 0) }
+            .foregroundStyle(theme.primaryText)
+            .padding(16)
+            .frame(width: 374)
+            .frame(maxHeight: isColumn ? .infinity : 460)
+            .background {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.panelBackground)
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.notificationCenter")
         }
-        .foregroundStyle(theme.primaryText)
-        .padding(16)
-        .frame(width: 374)
-        .frame(maxHeight: isColumn ? .infinity : 460)
-        .background {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).fill(theme.panelBackground)
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous).strokeBorder(theme.separator)
-        }
-        .shadow(color: .black.opacity(0.3), radius: 20, y: 6)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.notificationCenter")
     }
 
     private func noticeCard(_ notice: DesktopNotice) -> some View {
@@ -386,29 +393,31 @@ struct PowerMenuItems: View {
     let controller: DesktopController
 
     var body: some View {
-        Button("Lock Screen", systemImage: "lock") { controller.lockScreen() }
-        Divider()
-        if controller.linux != nil {
-            Button("Restart Desktop Session", systemImage: "arrow.clockwise") {
-                Task { await controller.restartDesktopSession() }
-            }
-        }
-        if let controls = controller.systemControls {
-            if controls.canRebootLinux {
-                Button("Restart Linux", systemImage: "restart") {
-                    controller.session.saveNow()
-                    Task { await controls.rebootLinux() }
+        WithPerceptionTracking {
+            Button("Lock Screen", systemImage: "lock") { controller.lockScreen() }
+            Divider()
+            if controller.linux != nil {
+                Button("Restart Desktop Session", systemImage: "arrow.clockwise") {
+                    Task { await controller.restartDesktopSession() }
                 }
             }
-        }
-        Button("Quit", systemImage: "power", role: .destructive) {
-            controller.session.saveNow()
-            DiagnosticsCenter.shared.markCleanExit()
-            // A desktop session ends by leaving; iPadOS has no API for it, so the app exits,
-            // after open documents and the Linux file system are saved.
-            Task {
-                _ = await controller.lifecycle.flushForSuspension()
-                exit(0)
+            if let controls = controller.systemControls {
+                if controls.canRebootLinux {
+                    Button("Restart Linux", systemImage: "restart") {
+                        controller.session.saveNow()
+                        Task { await controls.rebootLinux() }
+                    }
+                }
+            }
+            Button("Quit", systemImage: "power", role: .destructive) {
+                controller.session.saveNow()
+                DiagnosticsCenter.shared.markCleanExit()
+                // A desktop session ends by leaving; iPadOS has no API for it, so the app exits,
+                // after open documents and the Linux file system are saved.
+                Task {
+                    _ = await controller.lifecycle.flushForSuspension()
+                    exit(0)
+                }
             }
         }
     }

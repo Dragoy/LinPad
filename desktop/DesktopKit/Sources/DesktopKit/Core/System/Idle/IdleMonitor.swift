@@ -1,17 +1,17 @@
 import SwiftUI
-import Observation
+import Perception
 import UIKit
 
 /// Notes input anywhere on the desktop and, after the idle timeouts in Settings,
 /// shows the screensaver and locks the screen. Never while a screen recording runs or a
 /// maximized window plays media (a fullscreen video), or while Keep Awake is on.
-@Observable @MainActor
+@Perceptible @MainActor
 final class IdleMonitor {
     private(set) var isScreensaverShown = false
-    @ObservationIgnored private weak var controller: DesktopController?
-    @ObservationIgnored private var lastActivity = Date()
-    @ObservationIgnored private var task: Task<Void, Never>?
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private weak var controller: DesktopController?
+    @PerceptionIgnored private var lastActivity = Date()
+    @PerceptionIgnored private var task: Task<Void, Never>?
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
 
     private static let checkInterval: Duration = .seconds(5)
 

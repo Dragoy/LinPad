@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 enum DesktopCoordinateSpace {
     static let name = "DesktopKit.desktop"
@@ -20,31 +21,35 @@ struct WindowLayer: View {
         removal: .opacity.animation(.linear(duration: 0.15)))
 
     var body: some View {
-        let overview = controller.isOverviewPresented ? OverviewLayout(controller: controller) : nil
-        ZStack(alignment: .topLeading) {
-            if let overview {
-                OverviewBackdrop(controller: controller, layout: overview)
-                    .zIndex(-1)
-                    .transition(.opacity)
+        WithPerceptionTracking {
+            let overview = controller.isOverviewPresented ? OverviewLayout(controller: controller) : nil
+            ZStack(alignment: .topLeading) {
+                if let overview {
+                    OverviewBackdrop(controller: controller, layout: overview)
+                        .zIndex(-1)
+                        .transition(.opacity)
+                }
+                if let preview = manager.snapPreview, let window = manager.window(withID: preview.windowID) {
+                    SnapPreviewView(frame: preview.frame)
+                        .zIndex(Double(manager.stackingOrder(of: window)) - 0.5)
+                }
+                if controller.isRegionCapturePresented {
+                    RegionCaptureView(controller: controller)
+                        .zIndex(Double(Int32.max))
+                }
+                ForEach(manager.windows) { window in
+                    WithPerceptionTracking {
+                        WindowView(window: window, controller: controller, overviewFrame: overview?.frames[window.id])
+                            .zIndex(Double(manager.stackingOrder(of: window)))
+                            .transition(reduceMotion ? .opacity : Self.popIn)
+                    }
+                }
             }
-            if let preview = manager.snapPreview, let window = manager.window(withID: preview.windowID) {
-                SnapPreviewView(frame: preview.frame)
-                    .zIndex(Double(manager.stackingOrder(of: window)) - 0.5)
-            }
-            if controller.isRegionCapturePresented {
-                RegionCaptureView(controller: controller)
-                    .zIndex(Double(Int32.max))
-            }
-            ForEach(manager.windows) { window in
-                WindowView(window: window, controller: controller, overviewFrame: overview?.frames[window.id])
-                    .zIndex(Double(manager.stackingOrder(of: window)))
-                    .transition(reduceMotion ? .opacity : Self.popIn)
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .transaction { transaction in
-            if reduceMotion, transaction.animation != nil {
-                transaction.animation = .easeInOut(duration: 0.12)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .transaction { transaction in
+                if reduceMotion, transaction.animation != nil {
+                    transaction.animation = .easeInOut(duration: 0.12)
+                }
             }
         }
     }
@@ -56,18 +61,20 @@ private struct SnapPreviewView: View {
 
     // Deliberately no material: a live blur under a 120 Hz drag costs a full-screen offscreen pass.
     var body: some View {
-        RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
-            .fill(theme.accent.opacity(0.2))
-            .overlay {
-                RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
-                    .strokeBorder(theme.accent.opacity(0.75), lineWidth: 2)
-            }
-            .padding(6)
-            .frame(width: frame.width, height: frame.height)
-            .offset(x: frame.minX, y: frame.minY)
-            .allowsHitTesting(false)
-            .transition(.opacity)
-            .accessibilityIdentifier("desktop.snapPreview")
+        WithPerceptionTracking {
+            RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+                .fill(theme.accent.opacity(0.2))
+                .overlay {
+                    RoundedRectangle(cornerRadius: theme.cornerRadius, style: .continuous)
+                        .strokeBorder(theme.accent.opacity(0.75), lineWidth: 2)
+                }
+                .padding(6)
+                .frame(width: frame.width, height: frame.height)
+                .offset(x: frame.minX, y: frame.minY)
+                .allowsHitTesting(false)
+                .transition(.opacity)
+                .accessibilityIdentifier("desktop.snapPreview")
+        }
     }
 }
 
@@ -89,59 +96,61 @@ struct WindowView: View {
     private var isInOverview: Bool { overviewFrame != nil }
 
     var body: some View {
-        let frame = manager.displayFrame(for: window)
-        let isMaximized = window.isMaximized && !isInOverview
-        let radius = isMaximized ? 0 : theme.cornerRadius
-        let squareBottom = style.spec.skin?.squaresBottomCorners == true
-        // The clip stays a plain rounded rectangle (a square-bottomed clip hid centred titles on
-        // iOS 26); Luna's and Aqua's square bottom corners are filled in behind it instead.
-        let clip = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        let shape = WindowShape(radius: radius, squareBottom: squareBottom)
-        let placement = placement(for: frame)
+        WithPerceptionTracking {
+            let frame = manager.displayFrame(for: window)
+            let isMaximized = window.isMaximized && !isInOverview
+            let radius = isMaximized ? 0 : theme.cornerRadius
+            let squareBottom = style.spec.skin?.squaresBottomCorners == true
+            // The clip stays a plain rounded rectangle (a square-bottomed clip hid centred titles on
+            // iOS 26); Luna's and Aqua's square bottom corners are filled in behind it instead.
+            let clip = RoundedRectangle(cornerRadius: radius, style: .continuous)
+            let shape = WindowShape(radius: radius, squareBottom: squareBottom)
+            let placement = placement(for: frame)
 
-        VStack(spacing: 0) {
-            titleBar
-            WindowContentHost(window: window)
-                .environment(\.desktopWindowIsVisible, isVisible)
-                .environment(\.desktopWindowIsFocused, isFocused && !controller.isOverlayPresented)
-                // An app whose minimum width exceeds the window must not widen the window past
-                // its title bar or push its left edge off screen: it is laid out from the
-                // top-leading corner and clipped to the window.
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
-                .clipped()
-                .background(theme.windowBackground)
-        }
-        .clipShape(clip)
-        .background(alignment: .bottom) {
-            if squareBottom && radius > 0 { theme.windowBackground.frame(height: radius) }
-        }
-        .overlay {
-            Group {
-                // Era skins draw their own frame instead of the focus ring (EraStyles.swift).
-                if let skin = style.spec.skin {
-                    if !isMaximized { EraWindowFrame(skin: skin, shape: shape, isFocused: isFocused) }
-                } else {
-                    border(shape)
-                }
+            VStack(spacing: 0) {
+                titleBar
+                WindowContentHost(window: window)
+                    .environment(\.desktopWindowIsVisible, isVisible)
+                    .environment(\.desktopWindowIsFocused, isFocused && !controller.isOverlayPresented)
+                    // An app whose minimum width exceeds the window must not widen the window past
+                    // its title bar or push its left edge off screen: it is laid out from the
+                    // top-leading corner and clipped to the window.
+                    .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity, alignment: .topLeading)
+                    .clipped()
+                    .background(theme.windowBackground)
             }
-            .allowsHitTesting(false)
-            .animation(DesktopMotion.quick, value: isFocused)
+            .clipShape(clip)
+            .background(alignment: .bottom) {
+                if squareBottom && radius > 0 { theme.windowBackground.frame(height: radius) }
+            }
+            .overlay {
+                Group {
+                    // Era skins draw their own frame instead of the focus ring (EraStyles.swift).
+                    if let skin = style.spec.skin {
+                        if !isMaximized { EraWindowFrame(skin: skin, shape: shape, isFocused: isFocused) }
+                    } else {
+                        border(shape)
+                    }
+                }
+                .allowsHitTesting(false)
+                .animation(DesktopMotion.quick, value: isFocused)
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(window.title)
+            .accessibilityIdentifier("window:\(window.appID)")
+            .accessibilityValue(accessibilityState)
+            .background {
+                WindowShadow(cornerRadius: radius, isFocused: isFocused, isHidden: isMaximized || !theme.showsWindowShadows)
+            }
+            .overlay { if !window.isMaximized && !isInOverview { resizeHandles } }
+            .overlay { if isInOverview { overviewInteraction } }
+            .frame(width: frame.width, height: frame.height)
+            .scaleEffect(placement.scale, anchor: .topLeading)
+            .opacity(placement.opacity)
+            .offset(x: placement.origin.x + overviewDrag.width, y: placement.origin.y + overviewDrag.height)
+            .allowsHitTesting(isVisible)
+            .accessibilityHidden(!isVisible)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(window.title)
-        .accessibilityIdentifier("window:\(window.appID)")
-        .accessibilityValue(accessibilityState)
-        .background {
-            WindowShadow(cornerRadius: radius, isFocused: isFocused, isHidden: isMaximized || !theme.showsWindowShadows)
-        }
-        .overlay { if !window.isMaximized && !isInOverview { resizeHandles } }
-        .overlay { if isInOverview { overviewInteraction } }
-        .frame(width: frame.width, height: frame.height)
-        .scaleEffect(placement.scale, anchor: .topLeading)
-        .opacity(placement.opacity)
-        .offset(x: placement.origin.x + overviewDrag.width, y: placement.origin.y + overviewDrag.height)
-        .allowsHitTesting(isVisible)
-        .accessibilityHidden(!isVisible)
     }
 
     /// Omarchy's focus ring: 2 pt in the accent (or the theme's border colour) on the focused
@@ -358,7 +367,9 @@ private struct WindowContentHost: View {
     let window: DesktopWindow
 
     var body: some View {
-        window.content
+        WithPerceptionTracking {
+            window.content
+        }
     }
 }
 
@@ -367,16 +378,18 @@ private struct ResizeGrip: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Path { path in
-            for inset in [0.0, 4.0, 8.0] {
-                path.move(to: CGPoint(x: 10, y: inset))
-                path.addLine(to: CGPoint(x: inset, y: 10))
+        WithPerceptionTracking {
+            Path { path in
+                for inset in [0.0, 4.0, 8.0] {
+                    path.move(to: CGPoint(x: 10, y: inset))
+                    path.addLine(to: CGPoint(x: inset, y: 10))
+                }
             }
+            .stroke(theme.secondaryText.opacity(isEmphasized ? 0.7 : 0.35),
+                    style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
+            .frame(width: 10, height: 10)
+            .accessibilityHidden(true)
         }
-        .stroke(theme.secondaryText.opacity(isEmphasized ? 0.7 : 0.35),
-                style: StrokeStyle(lineWidth: 1.2, lineCap: .round))
-        .frame(width: 10, height: 10)
-        .accessibilityHidden(true)
     }
 }
 
@@ -388,16 +401,18 @@ private struct ResizeHandle: View {
     @State private var origin: CGRect?
 
     var body: some View {
-        ResizeInteraction(
-            edge: edge,
-            onBegan: { origin = manager.beginResize(windowID) },
-            onChanged: { translation in
-                guard let origin else { return }
-                manager.updateResize(windowID, from: origin, edge: edge, translation: translation)
-            },
-            onEnded: {
-                origin = nil
-                manager.endResize(windowID)
-            })
+        WithPerceptionTracking {
+            ResizeInteraction(
+                edge: edge,
+                onBegan: { origin = manager.beginResize(windowID) },
+                onChanged: { translation in
+                    guard let origin else { return }
+                    manager.updateResize(windowID, from: origin, edge: edge, translation: translation)
+                },
+                onEnded: {
+                    origin = nil
+                    manager.endResize(windowID)
+                })
+        }
     }
 }

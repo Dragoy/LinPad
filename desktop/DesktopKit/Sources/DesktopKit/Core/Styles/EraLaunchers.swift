@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// The launchers of the desktop themes' eras: Luna's two-column start menu, the glass start
 /// menu with its search field, 98's cascading list with a side band, and Platinum's
@@ -23,19 +24,21 @@ struct EraLauncher: View {
     }
 
     var body: some View {
-        Group {
-            switch skin {
-            case .luna: luna
-            case .classic: classic
-            case .platinum: platinum
-            default: glass
+        WithPerceptionTracking {
+            Group {
+                switch skin {
+                case .luna: luna
+                case .classic: classic
+                case .platinum: platinum
+                default: glass
+                }
             }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.launcher")
+            // The menu sits in the panel's corner whatever the overlay around it does.
+            .padding(.leading, skin == .platinum ? 6 : 0)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: skin.launcherAlignment)
         }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.launcher")
-        // The menu sits in the panel's corner whatever the overlay around it does.
-        .padding(.leading, skin == .platinum ? 6 : 0)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: skin.launcherAlignment)
     }
 
     private func launch(_ app: DesktopAppDescriptor) {
@@ -345,25 +348,29 @@ private struct EraMenuRow<Content: View>: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            content(isHovered)
-                .padding(.horizontal, 8)
-                .frame(height: height)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(isHovered ? highlight : .clear)
-                .contentShape(Rectangle())
+        WithPerceptionTracking {
+            Button(action: action) {
+                content(isHovered)
+                    .padding(.horizontal, 8)
+                    .frame(height: height)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(isHovered ? highlight : .clear)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
     }
 }
 
 private struct ClassicSeparator: View {
     var body: some View {
-        VStack(spacing: 0) {
-            Color(rgb: 0x808080).frame(height: 1)
-            Color.white.frame(height: 1)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                Color(rgb: 0x808080).frame(height: 1)
+                Color.white.frame(height: 1)
+            }
+            .padding(.vertical, 3).padding(.horizontal, 2)
         }
-        .padding(.vertical, 3).padding(.horizontal, 2)
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Small building blocks shared by the built-in apps so they look like one family.
 
@@ -31,43 +32,45 @@ struct InlineBanner: View {
     var onDismiss: (() -> Void)?
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Image(systemName: kind.symbol)
-                .foregroundStyle(kind.tint)
-            Text(message)
-                .font(.callout)
-                .foregroundStyle(theme.primaryText)
-                .lineLimit(4)
-                .textSelection(.enabled)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .buttonStyle(.plain)
-                    .font(.callout.weight(.semibold))
+        WithPerceptionTracking {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Image(systemName: kind.symbol)
+                    .foregroundStyle(kind.tint)
+                Text(message)
+                    .font(.callout)
                     .foregroundStyle(theme.primaryText)
-                    .underline()
-                    .hoverEffect(.highlight)
-            }
-            if let onDismiss {
-                Button(action: onDismiss) {
-                    Image(systemName: "xmark")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(theme.secondaryText)
-                        .frame(width: 22, height: 22)
-                        .contentShape(Rectangle())
+                    .lineLimit(4)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if let actionTitle, let action {
+                    Button(actionTitle, action: action)
+                        .buttonStyle(.plain)
+                        .font(.callout.weight(.semibold))
+                        .foregroundStyle(theme.primaryText)
+                        .underline()
+                        .hoverEffect(.highlight)
                 }
-                .buttonStyle(.plain)
-                .hoverEffect(.highlight)
-                .accessibilityLabel("Dismiss")
+                if let onDismiss {
+                    Button(action: onDismiss) {
+                        Image(systemName: "xmark")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(theme.secondaryText)
+                            .frame(width: 22, height: 22)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .hoverEffect(.highlight)
+                    .accessibilityLabel("Dismiss")
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .background(kind.tint.opacity(0.13))
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(kind.tint.opacity(0.35)).frame(height: 1)
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 7)
-        .background(kind.tint.opacity(0.13))
-        .overlay(alignment: .bottom) {
-            Rectangle().fill(kind.tint.opacity(0.35)).frame(height: 1)
-        }
-        .transition(.move(edge: .top).combined(with: .opacity))
     }
 }
 
@@ -92,28 +95,30 @@ struct ToolbarIconButton: View {
     }
 
     var body: some View {
-        Button(action: action) {
-            ThemeGlyph(icon, symbol: symbol, size: 14)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(style.spec.skin.map { EraButtonFace.label($0, isActive: false, isProminent: false, theme: theme) }
-                                 ?? (isActive ? theme.accent : theme.primaryText))
-                .frame(width: 30, height: 28)
-                .background {
-                    if let skin = style.spec.skin {
-                        EraToolbarButtonFace(skin: skin, isActive: isActive, isHovered: isHovered)
-                    } else {
-                        RoundedRectangle(cornerRadius: 6, style: .continuous)
-                            .fill(isActive ? theme.accent.opacity(0.18) : Color.clear)
+        WithPerceptionTracking {
+            Button(action: action) {
+                ThemeGlyph(icon, symbol: symbol, size: 14)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(style.spec.skin.map { EraButtonFace.label($0, isActive: false, isProminent: false, theme: theme) }
+                                     ?? (isActive ? theme.accent : theme.primaryText))
+                    .frame(width: 30, height: 28)
+                    .background {
+                        if let skin = style.spec.skin {
+                            EraToolbarButtonFace(skin: skin, isActive: isActive, isHovered: isHovered)
+                        } else {
+                            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                .fill(isActive ? theme.accent.opacity(0.18) : Color.clear)
+                        }
                     }
-                }
-                .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    .contentShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
+            .opacity(isEnabled ? 1 : 0.35)
+            .hoverEffect(.highlight)
+            .help(help)
+            .accessibilityLabel(help)
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
-        .opacity(isEnabled ? 1 : 0.35)
-        .hoverEffect(.highlight)
-        .help(help)
-        .accessibilityLabel(help)
     }
 }
 
@@ -128,30 +133,32 @@ struct ToolbarTextButton: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 5) {
-                if let symbol {
-                    Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 5) {
+                    if let symbol {
+                        Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
+                    }
+                    Text(title).font(.system(size: 13, weight: .medium))
                 }
-                Text(title).font(.system(size: 13, weight: .medium))
-            }
-            .foregroundStyle(style.spec.skin.map { EraButtonFace.label($0, isActive: false, isProminent: prominent, theme: theme) }
-                             ?? (prominent && isEnabled ? theme.accent.readableLabel : theme.primaryText))
-            .padding(.horizontal, 10)
-            .frame(height: 26)
-            .background {
-                if let skin = style.spec.skin {
-                    EraButtonFace(skin: skin, isProminent: prominent)
-                } else {
-                    Capsule().fill(prominent && isEnabled ? theme.accent : theme.primaryText.opacity(prominent ? 0 : 0.08))
+                .foregroundStyle(style.spec.skin.map { EraButtonFace.label($0, isActive: false, isProminent: prominent, theme: theme) }
+                                 ?? (prominent && isEnabled ? theme.accent.readableLabel : theme.primaryText))
+                .padding(.horizontal, 10)
+                .frame(height: 26)
+                .background {
+                    if let skin = style.spec.skin {
+                        EraButtonFace(skin: skin, isProminent: prominent)
+                    } else {
+                        Capsule().fill(prominent && isEnabled ? theme.accent : theme.primaryText.opacity(prominent ? 0 : 0.08))
+                    }
                 }
+                .overlay(Capsule().strokeBorder(prominent && !isEnabled && style.spec.skin == nil ? theme.separator : Color.clear, lineWidth: 1))
+                .contentShape(Capsule())
             }
-            .overlay(Capsule().strokeBorder(prominent && !isEnabled && style.spec.skin == nil ? theme.separator : Color.clear, lineWidth: 1))
-            .contentShape(Capsule())
+            .buttonStyle(.plain)
+            .opacity(isEnabled ? 1 : 0.4)
+            .hoverEffect(.highlight)
         }
-        .buttonStyle(.plain)
-        .opacity(isEnabled ? 1 : 0.4)
-        .hoverEffect(.highlight)
     }
 }
 
@@ -161,17 +168,19 @@ struct AppToolbar<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        HStack(spacing: 4) {
-            content()
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
-        .background {
-            if let skin = style.spec.skin { EraBarBackground(skin: skin) } else { theme.titleBarInactive }
-        }
-        .overlay(alignment: .bottom) {
-            if style.spec.skin == nil { Rectangle().fill(theme.separator).frame(height: 1) }
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                content()
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity)
+            .background {
+                if let skin = style.spec.skin { EraBarBackground(skin: skin) } else { theme.titleBarInactive }
+            }
+            .overlay(alignment: .bottom) {
+                if style.spec.skin == nil { Rectangle().fill(theme.separator).frame(height: 1) }
+            }
         }
     }
 }
@@ -182,20 +191,22 @@ struct AppStatusBar<Content: View>: View {
     @ViewBuilder let content: () -> Content
 
     var body: some View {
-        HStack(spacing: 12) {
-            content()
-        }
-        .font(.caption)
-        .foregroundStyle(theme.secondaryText)
-        .lineLimit(1)
-        .padding(.horizontal, 12)
-        .frame(height: 24)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            if let skin = style.spec.skin { EraBarBackground(skin: skin, isStatusBar: true) } else { theme.titleBarInactive }
-        }
-        .overlay(alignment: .top) {
-            Rectangle().fill(theme.separator).frame(height: 1)
+        WithPerceptionTracking {
+            HStack(spacing: 12) {
+                content()
+            }
+            .font(.caption)
+            .foregroundStyle(theme.secondaryText)
+            .lineLimit(1)
+            .padding(.horizontal, 12)
+            .frame(height: 24)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if let skin = style.spec.skin { EraBarBackground(skin: skin, isStatusBar: true) } else { theme.titleBarInactive }
+            }
+            .overlay(alignment: .top) {
+                Rectangle().fill(theme.separator).frame(height: 1)
+            }
         }
     }
 }
@@ -205,9 +216,11 @@ struct ThemedSeparator: View {
     var vertical = false
 
     var body: some View {
-        Rectangle()
-            .fill(theme.separator)
-            .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+        WithPerceptionTracking {
+            Rectangle()
+                .fill(theme.separator)
+                .frame(width: vertical ? 1 : nil, height: vertical ? nil : 1)
+        }
     }
 }
 
@@ -219,36 +232,38 @@ struct AppSearchField: View {
     var onSubmit: () -> Void = {}
 
     var body: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(theme.secondaryText)
-            TextField(prompt, text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 13))
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-                .submitLabel(.search)
-                .onSubmit(onSubmit)
-            if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundStyle(theme.secondaryText)
+        WithPerceptionTracking {
+            HStack(spacing: 6) {
+                Image(systemName: "magnifyingglass")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(theme.secondaryText)
+                TextField(prompt, text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 13))
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .submitLabel(.search)
+                    .onSubmit(onSubmit)
+                if !text.isEmpty {
+                    Button {
+                        text = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Clear")
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Clear")
             }
-        }
-        .padding(.horizontal, 8)
-        .frame(height: 28)
-        .background {
-            if let skin = style.spec.skin {
-                EraFieldBackground(skin: skin)
-            } else {
-                RoundedRectangle(cornerRadius: 7, style: .continuous).fill(theme.windowBackground)
-                RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(theme.separator, lineWidth: 1)
+            .padding(.horizontal, 8)
+            .frame(height: 28)
+            .background {
+                if let skin = style.spec.skin {
+                    EraFieldBackground(skin: skin)
+                } else {
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).fill(theme.windowBackground)
+                    RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(theme.separator, lineWidth: 1)
+                }
             }
         }
     }
@@ -261,23 +276,25 @@ struct AppEmptyState: View {
     var message: String?
 
     var body: some View {
-        VStack(spacing: 8) {
-            Image(systemName: symbol)
-                .font(.system(size: 34, weight: .light))
-                .foregroundStyle(theme.secondaryText.opacity(0.7))
-            Text(title)
-                .font(.headline)
-                .foregroundStyle(theme.primaryText)
-            if let message {
-                Text(message)
-                    .font(.callout)
-                    .foregroundStyle(theme.secondaryText)
-                    .multilineTextAlignment(.center)
-                    .frame(maxWidth: 320)
+        WithPerceptionTracking {
+            VStack(spacing: 8) {
+                Image(systemName: symbol)
+                    .font(.system(size: 34, weight: .light))
+                    .foregroundStyle(theme.secondaryText.opacity(0.7))
+                Text(title)
+                    .font(.headline)
+                    .foregroundStyle(theme.primaryText)
+                if let message {
+                    Text(message)
+                        .font(.callout)
+                        .foregroundStyle(theme.secondaryText)
+                        .multilineTextAlignment(.center)
+                        .frame(maxWidth: 320)
+                }
             }
+            .padding(24)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .padding(24)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -292,24 +309,26 @@ struct SortableHeader: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 3) {
-                if alignment == .trailing { Spacer(minLength: 0) }
-                Text(title)
-                if isActive {
-                    Image(systemName: ascending ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 8, weight: .bold))
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 3) {
+                    if alignment == .trailing { Spacer(minLength: 0) }
+                    Text(title)
+                    if isActive {
+                        Image(systemName: ascending ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    if alignment == .leading { Spacer(minLength: 0) }
                 }
-                if alignment == .leading { Spacer(minLength: 0) }
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(style.spec.skin?.isBevelled == true ? Color.black : (isActive ? theme.primaryText : theme.secondaryText))
+                .padding(.horizontal, style.spec.skin?.isBevelled == true ? 4 : 0)
+                .frame(maxHeight: style.spec.skin == nil ? nil : .infinity)
+                .background { if let skin = style.spec.skin { EraHeaderBackground(skin: skin) } }
+                .contentShape(Rectangle())
             }
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(style.spec.skin?.isBevelled == true ? Color.black : (isActive ? theme.primaryText : theme.secondaryText))
-            .padding(.horizontal, style.spec.skin?.isBevelled == true ? 4 : 0)
-            .frame(maxHeight: style.spec.skin == nil ? nil : .infinity)
-            .background { if let skin = style.spec.skin { EraHeaderBackground(skin: skin) } }
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
     }
 }

@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 import UIKit
 import UniformTypeIdentifiers
 
@@ -40,14 +40,14 @@ struct IPadPlace: Codable, Identifiable, Equatable {
 /// The iPad places the Files sidebar shows. iOSFS owns the mounts themselves; this keeps the
 /// names and notices places whose folder could not be mounted again (deleted, an unplugged
 /// drive, an app that was removed), so the sidebar can offer Reconnect or Remove.
-@Observable @MainActor
+@Perceptible @MainActor
 final class IPadPlaceStore {
     static let shared = IPadPlaceStore()
     static let storageKey = "desktop.ipadPlaces"
     static let mountRoot = "/mnt/ipad"
 
     private(set) var places: [IPadPlace] = []
-    @ObservationIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

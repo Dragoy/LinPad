@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 import OSLog
 import UIKit
 
@@ -17,7 +17,7 @@ struct BackupRecord: Identifiable, Equatable {
 /// Settings › Maintenance › Back Up and Restore: /root and /home (minus caches) plus the
 /// desktop's own settings, wallpapers and calendar, in one tar file the user can keep in
 /// Files, iCloud Drive or on a USB drive. One per host.
-@Observable @MainActor
+@Perceptible @MainActor
 final class BackupService {
     enum BackupState: Equatable {
         case idle
@@ -103,18 +103,18 @@ final class BackupService {
     var isBackupSheetRequested = false
     var isRestoreSheetRequested = false
 
-    @ObservationIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
-    @ObservationIgnored var restartSession: (() async -> Void)?
+    @PerceptionIgnored var notify: ((String, DesktopToast.Action?) -> Void)?
+    @PerceptionIgnored var restartSession: (() async -> Void)?
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored let backupsDirectory: URL
-    @ObservationIgnored private let supportDirectory: URL
-    @ObservationIgnored private let guestRoot: @MainActor () -> URL?
-    @ObservationIgnored private let now: () -> Date
-    @ObservationIgnored private var currentWork: String?
-    @ObservationIgnored private var scheduledTask: Task<Void, Never>?
-    @ObservationIgnored private var foregroundObserver: NSObjectProtocol?
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored let backupsDirectory: URL
+    @PerceptionIgnored private let supportDirectory: URL
+    @PerceptionIgnored private let guestRoot: @MainActor () -> URL?
+    @PerceptionIgnored private let now: () -> Date
+    @PerceptionIgnored private var currentWork: String?
+    @PerceptionIgnored private var scheduledTask: Task<Void, Never>?
+    @PerceptionIgnored private var foregroundObserver: NSObjectProtocol?
     private static let logger = Logger(subsystem: "DesktopKit", category: "Backup")
 
     init(host: any LinuxHost, defaults: UserDefaults = .standard, backupsDirectory: URL? = nil,
@@ -132,7 +132,7 @@ final class BackupService {
         keep = max(1, defaults.object(forKey: Keys.keep) as? Int ?? Self.defaultKeep)
     }
 
-    @ObservationIgnored private static var services: [ObjectIdentifier: BackupService] = [:]
+    @PerceptionIgnored private static var services: [ObjectIdentifier: BackupService] = [:]
 
     static func shared(for host: any LinuxHost) -> BackupService {
         let key = ObjectIdentifier(host)

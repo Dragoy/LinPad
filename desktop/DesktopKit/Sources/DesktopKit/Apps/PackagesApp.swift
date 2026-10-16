@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 enum PackagesApp {
@@ -29,7 +30,7 @@ enum PackagesTab: String, CaseIterable, Identifiable {
 }
 
 @MainActor
-@Observable
+@Perceptible
 final class PackagesModel {
     static let essentials: [EssentialPackage] = [
         EssentialPackage(name: "nodejs", summary: "JavaScript runtime", symbol: "hexagon"),
@@ -45,10 +46,10 @@ final class PackagesModel {
     private static let logLimit = 64_000
     private static let resultLimit = 300
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let window: any WindowHandle
-    @ObservationIgnored private var searchTask: Task<Void, Never>?
-    @ObservationIgnored private var didStart = false
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let window: any WindowHandle
+    @PerceptionIgnored private var searchTask: Task<Void, Never>?
+    @PerceptionIgnored private var didStart = false
 
     var tab: PackagesTab = .browse
     var query = ""
@@ -219,48 +220,50 @@ struct PackagesAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            if let message = model.errorMessage {
-                InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
-            }
-            if let operation = model.activeOperation {
-                HStack(spacing: 8) {
-                    ProgressView().controlSize(.small)
-                    Text(operation + "…").font(.callout)
-                    Spacer()
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                if let message = model.errorMessage {
+                    InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
                 }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(theme.accent.opacity(0.12))
-            }
-            Group {
-                switch model.tab {
-                case .browse: browseView
-                case .installed: installedView
+                if let operation = model.activeOperation {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(operation + "…").font(.callout)
+                        Spacer()
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(theme.accent.opacity(0.12))
+                }
+                Group {
+                    switch model.tab {
+                    case .browse: browseView
+                    case .installed: installedView
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if model.isLogVisible {
+                    logPane
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if model.isLogVisible {
-                logPane
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .animation(.easeOut(duration: 0.18), value: model.isLogVisible)
+            .animation(.easeOut(duration: 0.18), value: model.activeOperation)
+            .task { model.startIfNeeded() }
+            .alert("Remove \(pendingRemoval ?? "")?", isPresented: isRemovalPresented, presenting: pendingRemoval) { name in
+                Button("Remove", role: .destructive) { model.remove(name) }
+                Button("Cancel", role: .cancel) {}
+            } message: { _ in
+                Text("Runs `apk del`. Packages that depend on it may stop working.")
             }
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .animation(.easeOut(duration: 0.18), value: model.isLogVisible)
-        .animation(.easeOut(duration: 0.18), value: model.activeOperation)
-        .task { model.startIfNeeded() }
-        .alert("Remove \(pendingRemoval ?? "")?", isPresented: isRemovalPresented, presenting: pendingRemoval) { name in
-            Button("Remove", role: .destructive) { model.remove(name) }
-            Button("Cancel", role: .cancel) {}
-        } message: { _ in
-            Text("Runs `apk del`. Packages that depend on it may stop working.")
         }
     }
 
     private var toolbar: some View {
         AppToolbar {
-            Picker("Section", selection: $model.tab) {
+            Picker("Section", selection: model.binding(\.tab)) {
                 ForEach(PackagesTab.allCases) { tab in
                     Text(tab.rawValue).tag(tab)
                 }
@@ -269,10 +272,10 @@ struct PackagesAppView: View {
             .frame(width: 190)
             Group {
                 if model.tab == .browse {
-                    AppSearchField(prompt: "Search Alpine packages", text: $model.query) { model.searchNow() }
-                        .onChange(of: model.query) { _, _ in model.queryChanged() }
+                    AppSearchField(prompt: "Search Alpine packages", text: model.binding(\.query)) { model.searchNow() }
+                        .onChangeCompat(of: model.query) { _, _ in model.queryChanged() }
                 } else {
-                    AppSearchField(prompt: "Filter installed", text: $model.installedFilter)
+                    AppSearchField(prompt: "Filter installed", text: model.binding(\.installedFilter))
                 }
             }
             .frame(maxWidth: 300)
@@ -303,8 +306,10 @@ struct PackagesAppView: View {
             ScrollView {
                 LazyVStack(spacing: 0) {
                     ForEach(model.results) { package in
-                        packageRow(package)
-                        ThemedSeparator().padding(.leading, 14)
+                        WithPerceptionTracking {
+                            packageRow(package)
+                            ThemedSeparator().padding(.leading, 14)
+                        }
                     }
                 }
             }
@@ -334,7 +339,9 @@ struct PackagesAppView: View {
                 }
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 220), spacing: 10)], spacing: 10) {
                     ForEach(PackagesModel.essentials) { essential in
-                        essentialCard(essential)
+                        WithPerceptionTracking {
+                            essentialCard(essential)
+                        }
                     }
                 }
             }
@@ -440,8 +447,10 @@ struct PackagesAppView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(packages) { package in
-                            packageRow(package)
-                            ThemedSeparator().padding(.leading, 14)
+                            WithPerceptionTracking {
+                                packageRow(package)
+                                ThemedSeparator().padding(.leading, 14)
+                            }
                         }
                     }
                 }
@@ -467,17 +476,19 @@ struct PackagesAppView: View {
             .background(theme.titleBarInactive)
             .overlay(alignment: .top) { ThemedSeparator() }
             ScrollViewReader { proxy in
-                ScrollView {
-                    Text(model.log.isEmpty ? "No output yet." : model.log)
-                        .font(.system(size: 12, design: .monospaced))
-                        .foregroundStyle(model.log.isEmpty ? theme.secondaryText : theme.primaryText)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(10)
-                    Color.clear.frame(height: 1).id("logEnd")
+                WithPerceptionTracking {
+                    ScrollView {
+                        Text(model.log.isEmpty ? "No output yet." : model.log)
+                            .font(.system(size: 12, design: .monospaced))
+                            .foregroundStyle(model.log.isEmpty ? theme.secondaryText : theme.primaryText)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(10)
+                        Color.clear.frame(height: 1).id("logEnd")
+                    }
+                    .onChangeCompat(of: model.log) { _, _ in proxy.scrollTo("logEnd", anchor: .bottom) }
+                    .onAppear { proxy.scrollTo("logEnd", anchor: .bottom) }
                 }
-                .onChange(of: model.log) { _, _ in proxy.scrollTo("logEnd", anchor: .bottom) }
-                .onAppear { proxy.scrollTo("logEnd", anchor: .bottom) }
             }
             .frame(height: 170)
             .background(Color.black.opacity(0.35))

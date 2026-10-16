@@ -1,5 +1,5 @@
 import SwiftUI
-import Observation
+import Perception
 
 struct DesktopToast: Identifiable, Equatable {
     struct Action {
@@ -18,7 +18,7 @@ struct DesktopToast: Identifiable, Equatable {
 }
 
 /// Owns the shell's state and is what apps talk to through `DesktopActions`.
-@Observable @MainActor
+@Perceptible @MainActor
 final class DesktopController {
     private static let toastLifetime: Duration = .seconds(4)
     private static let maximumVisibleToasts = 4
@@ -41,8 +41,8 @@ final class DesktopController {
     var themeAppearance = ThemeAppearance.load()
     /// iPadOS's own light/dark, for the Automatic mode.
     var systemIsDark = true
-    @ObservationIgnored var scheduleTask: Task<Void, Never>?
-    @ObservationIgnored var linuxFontsTask: Task<Void, Never>?
+    @PerceptionIgnored var scheduleTask: Task<Void, Never>?
+    @PerceptionIgnored var linuxFontsTask: Task<Void, Never>?
     /// The colour theme picker (⌃⌥⇧Space), while open.
     var themePicker: ColorThemePicker?
     /// The Command Menu (⌘K), while open.
@@ -54,11 +54,11 @@ final class DesktopController {
     /// The screenshot area picker (⌃⌥⇧S), while open.
     var isRegionCapturePresented = false
     var isRecordingScreen = false
-    @ObservationIgnored var osdObserver: OSDObserver?
-    @ObservationIgnored private var memoryCloseObserver: NSObjectProtocol?
+    @PerceptionIgnored var osdObserver: OSDObserver?
+    @PerceptionIgnored private var memoryCloseObserver: NSObjectProtocol?
     /// Toasts under the pointer, which do not time out.
-    @ObservationIgnored var hoveredToasts: Set<UUID> = []
-    @ObservationIgnored private var wallpaperToast: UUID?
+    @PerceptionIgnored var hoveredToasts: Set<UUID> = []
+    @PerceptionIgnored private var wallpaperToast: UUID?
     /// Mirrors the root view's light/dark decision, which picks the light or dark wallpaper.
     var isDarkAppearance = true
     let switcher = WindowSwitcherModel()
@@ -85,21 +85,21 @@ final class DesktopController {
     }
 
     /// Text typed in Ubuntu's Activities search, handed to the application grid it opens.
-    @ObservationIgnored var launcherInitialQuery = ""
+    @PerceptionIgnored var launcherInitialQuery = ""
     /// The workspace a window dragged in the overview would land on.
     var overviewDropHover: Int?
     let keyboard = HardwareKeyboardMonitor()
     private(set) var style = DesktopStyle.stored(UserDefaults.standard.string(forKey: DesktopStyle.storageKey) ?? "")
     let icons: DesktopIconStore
-    @ObservationIgnored let input = DesktopInputCoordinator()
-    @ObservationIgnored private(set) lazy var keyCommands = DesktopKeyCommands(controller: self)
-    @ObservationIgnored private(set) lazy var session = DesktopSessionStore(controller: self)
+    @PerceptionIgnored let input = DesktopInputCoordinator()
+    @PerceptionIgnored private(set) lazy var keyCommands = DesktopKeyCommands(controller: self)
+    @PerceptionIgnored private(set) lazy var session = DesktopSessionStore(controller: self)
     /// Screen lock, app switching and iPadOS ending LinPad (Core/System/Lifecycle).
-    @ObservationIgnored private(set) lazy var lifecycle = LifecycleCoordinator(controller: self, host: host)
-    @ObservationIgnored private(set) lazy var nowPlaying = NowPlayingCenter(host: host)
-    @ObservationIgnored private(set) lazy var calendarStore = CalendarStore()
-    @ObservationIgnored private(set) lazy var widgets = DesktopWidgetStore()
-    @ObservationIgnored private(set) lazy var idle = IdleMonitor(controller: self)
+    @PerceptionIgnored private(set) lazy var lifecycle = LifecycleCoordinator(controller: self, host: host)
+    @PerceptionIgnored private(set) lazy var nowPlaying = NowPlayingCenter(host: host)
+    @PerceptionIgnored private(set) lazy var calendarStore = CalendarStore()
+    @PerceptionIgnored private(set) lazy var widgets = DesktopWidgetStore()
+    @PerceptionIgnored private(set) lazy var idle = IdleMonitor(controller: self)
 
     /// True while a shell overlay owns the keyboard and pointer, so windows must not react.
     var isOverlayPresented: Bool {
@@ -161,12 +161,12 @@ final class DesktopController {
         dismissTransientOverlays()
     }
 
-    @ObservationIgnored private lazy var actionsProxy = DesktopActionsProxy(controller: self)
+    @PerceptionIgnored private lazy var actionsProxy = DesktopActionsProxy(controller: self)
 
     /// Linux GUI apps, when the host can share its filesystem (Linux/).
     let linux: LinuxGUIBridge?
     /// Linux surface id → desktop window id.
-    @ObservationIgnored var linuxWindows: [UInt32: UUID] = [:]
+    @PerceptionIgnored var linuxWindows: [UInt32: UUID] = [:]
 
     /// Volume, session restart and reboot, when the host provides them.
     let systemControls: (any DesktopSystemControls)?
@@ -246,7 +246,7 @@ final class DesktopController {
     }
 
     /// Keys the desktop's icons handle while the desktop itself has focus (no window does).
-    @ObservationIgnored var desktopKeyHandler: ((DesktopIconKey) -> Bool)?
+    @PerceptionIgnored var desktopKeyHandler: ((DesktopIconKey) -> Bool)?
     /// True while desktop icons are selected and no window has focus.
     var desktopHasKeyboardFocus = false
 

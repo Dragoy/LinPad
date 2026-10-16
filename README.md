@@ -36,7 +36,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/iPadOS-17%2B-000000?style=flat-square&logo=apple" alt="iPadOS 17+">
+  <img src="https://img.shields.io/badge/iPadOS-16%2B-000000?style=flat-square&logo=apple" alt="iPadOS 16+">
   <img src="https://img.shields.io/badge/Apple_Silicon-M--series-555555?style=flat-square&logo=apple" alt="Apple Silicon">
   <img src="https://img.shields.io/badge/Alpine_Linux-3.21-0D597F?style=flat-square&logo=alpinelinux" alt="Alpine Linux">
   <img src="https://img.shields.io/badge/SwiftUI-Desktop-F05138?style=flat-square&logo=swift&logoColor=white" alt="SwiftUI">
@@ -186,7 +186,7 @@ gpu/build-third-party.sh          # virglrenderer + MoltenVK (once)
 release/build-rootfs.sh           # the Alpine system image (~50 min)
 
 xcodebuild -project iSH.xcodeproj -target iSH-ARM64 -configuration Release -sdk iphoneos \
-  -allowProvisioningUpdates SYMROOT=$PWD/build-ios-release IPHONEOS_DEPLOYMENT_TARGET=17.0 \
+  -allowProvisioningUpdates SYMROOT=$PWD/build-ios-release IPHONEOS_DEPLOYMENT_TARGET=16.0 \
   DEVELOPMENT_TEAM=<your team> ISH_JIT_BUILD=enabled build
 
 release/embed-rootfs.sh --device "build-ios-release/Release-iphoneos/iSH ARM64.app" \

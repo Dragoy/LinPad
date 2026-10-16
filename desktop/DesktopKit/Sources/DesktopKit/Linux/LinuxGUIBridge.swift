@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 import UIKit
 import os
 
@@ -65,7 +65,7 @@ protocol LinuxGUIBridgeDelegate: AnyObject {
 /// the backing file, so this side maps the same file and sees the pixels without
 /// any copy through the emulator. Control traffic is line-based over two FIFOs in
 /// the same directory; FIFOs in the fakefs are real host FIFOs.
-@Observable @MainActor
+@Perceptible @MainActor
 final class LinuxGUIBridge {
     enum State: Equatable {
         case stopped
@@ -80,34 +80,34 @@ final class LinuxGUIBridge {
     private(set) var state = State.stopped
     private(set) var applications: [LinuxDesktopEntry] = []
 
-    @ObservationIgnored weak var delegate: LinuxGUIBridgeDelegate?
-    @ObservationIgnored private let host: any LinuxGraphicsHost
-    @ObservationIgnored private var surfaces: [UInt32: LinuxSurface] = [:]
-    @ObservationIgnored private var textInputSurfaceID: UInt32?
+    @PerceptionIgnored weak var delegate: LinuxGUIBridgeDelegate?
+    @PerceptionIgnored private let host: any LinuxGraphicsHost
+    @PerceptionIgnored private var surfaces: [UInt32: LinuxSurface] = [:]
+    @PerceptionIgnored private var textInputSurfaceID: UInt32?
     #if DEBUG || DESKTOP_AUTOMATION
-    @ObservationIgnored private var textInputProbe: LinuxTextInputProbe?
+    @PerceptionIgnored private var textInputProbe: LinuxTextInputProbe?
     #endif
-    @ObservationIgnored private var eventsFD: Int32 = -1
-    @ObservationIgnored private var reader: FIFOLineReader?
-    @ObservationIgnored private var startTask: Task<Void, Never>?
-    @ObservationIgnored private var healthTask: Task<Void, Never>?
-    @ObservationIgnored private var pendingLaunches: [String] = []
-    @ObservationIgnored private var launchTimes: [Date] = []
-    @ObservationIgnored private var stats = FrameStats()
+    @PerceptionIgnored private var eventsFD: Int32 = -1
+    @PerceptionIgnored private var reader: FIFOLineReader?
+    @PerceptionIgnored private var startTask: Task<Void, Never>?
+    @PerceptionIgnored private var healthTask: Task<Void, Never>?
+    @PerceptionIgnored private var pendingLaunches: [String] = []
+    @PerceptionIgnored private var launchTimes: [Date] = []
+    @PerceptionIgnored private var stats = FrameStats()
     /// Where popups go so they can extend past their window; see LinuxPopupLayer.
-    @ObservationIgnored weak var popupLayer: UIView?
+    @PerceptionIgnored weak var popupLayer: UIView?
     /// UIPasteboard.changeCount last exchanged with Linux; -1 pushes the current
     /// pasteboard on the first paste.
-    @ObservationIgnored private var pasteboardChangeCount = -1
-    @ObservationIgnored private var controlKeysDown = Set<UInt32>()
+    @PerceptionIgnored private var pasteboardChangeCount = -1
+    @PerceptionIgnored private var controlKeysDown = Set<UInt32>()
     /// Keys Linux was told are down. A key held while LinPad leaves the screen (⌘ of
     /// ⌘-Tab, the shortcut that locks the iPad) never sends its release to this app.
-    @ObservationIgnored private var keysDown = Set<UInt32>()
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
-    @ObservationIgnored private var pendingAcks: [String] = []
-    @ObservationIgnored private var displayLink: CADisplayLink?
+    @PerceptionIgnored private var keysDown = Set<UInt32>()
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored private var pendingAcks: [String] = []
+    @PerceptionIgnored private var displayLink: CADisplayLink?
     /// Sends the iPad's keyboard layout to ishwl; LinuxSurfaceView feeds it key presses.
-    @ObservationIgnored let keyboardLayout = LinuxKeyboardLayoutMonitor()
+    @PerceptionIgnored let keyboardLayout = LinuxKeyboardLayoutMonitor()
 
     /// "firefox" opens guest URL requests in Firefox; anything else in Quick Preview.
     static let urlHandlerKey = "desktop.linux.urlHandler"

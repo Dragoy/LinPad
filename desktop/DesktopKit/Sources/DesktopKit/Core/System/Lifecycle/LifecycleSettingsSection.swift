@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// Settings › Background: keeping Linux running when LinPad leaves the screen, and what
@@ -21,45 +22,47 @@ struct LifecycleSettingsSection: View {
     }
 
     var body: some View {
-        SettingsSection(title: "Background", symbol: "moon.zzz") {
-            SettingsRow(title: "Keep Linux running in the background") {
-                Picker("Keep Linux running in the background", selection: $modeID) {
-                    ForEach(BackgroundExecution.allCases) { Text($0.title).tag($0.rawValue) }
-                }
-                .labelsHidden()
-                .accessibilityIdentifier("settings.background.mode")
-            }
-            Text(mode.explanation)
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-                .accessibilityIdentifier("settings.background.explanation")
-            if mode == .always {
-                locationStatus
-            }
-            ThemedSeparator()
-            SettingsRow(title: "Text Editor saves automatically") {
-                Toggle("Text Editor saves automatically", isOn: $editorAutosaves)
+        WithPerceptionTracking {
+            SettingsSection(title: "Background", symbol: "moon.zzz") {
+                SettingsRow(title: "Keep Linux running in the background") {
+                    Picker("Keep Linux running in the background", selection: $modeID) {
+                        ForEach(BackgroundExecution.allCases) { Text($0.title).tag($0.rawValue) }
+                    }
                     .labelsHidden()
-                    .tint(theme.accent)
-                    .accessibilityIdentifier("settings.background.editorAutosave")
-            }
-            Text("When LinPad leaves the screen it saves open documents, asks Linux apps to save, and writes the Linux files to storage. If iPadOS later closes LinPad to free memory, your windows reopen at the next start; VS Code, Firefox and LibreOffice bring back their own unsaved work.")
-                .font(.caption)
-                .foregroundStyle(theme.secondaryText)
-                .fixedSize(horizontal: false, vertical: true)
-            if let report = controller?.lifecycle.lastFlush {
-                Text(lastFlushText(report))
+                    .accessibilityIdentifier("settings.background.mode")
+                }
+                Text(mode.explanation)
                     .font(.caption)
                     .foregroundStyle(theme.secondaryText)
-                    .accessibilityIdentifier("settings.background.lastFlush")
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityIdentifier("settings.background.explanation")
+                if mode == .always {
+                    locationStatus
+                }
+                ThemedSeparator()
+                SettingsRow(title: "Text Editor saves automatically") {
+                    Toggle("Text Editor saves automatically", isOn: $editorAutosaves)
+                        .labelsHidden()
+                        .tint(theme.accent)
+                        .accessibilityIdentifier("settings.background.editorAutosave")
+                }
+                Text("When LinPad leaves the screen it saves open documents, asks Linux apps to save, and writes the Linux files to storage. If iPadOS later closes LinPad to free memory, your windows reopen at the next start; VS Code, Firefox and LibreOffice bring back their own unsaved work.")
+                    .font(.caption)
+                    .foregroundStyle(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let report = controller?.lifecycle.lastFlush {
+                    Text(lastFlushText(report))
+                        .font(.caption)
+                        .foregroundStyle(theme.secondaryText)
+                        .accessibilityIdentifier("settings.background.lastFlush")
+                }
             }
+            .onChangeCompat(of: modeID) { _, _ in
+                controller?.lifecycle.applyBackgroundExecution()
+                refreshLocationAccess()
+            }
+            .onAppear { refreshLocationAccess() }
         }
-        .onChange(of: modeID) { _, _ in
-            controller?.lifecycle.applyBackgroundExecution()
-            refreshLocationAccess()
-        }
-        .onAppear { refreshLocationAccess() }
     }
 
     @ViewBuilder

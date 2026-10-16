@@ -7,7 +7,7 @@ name: DnDHarness
 options:
   bundleIdPrefix: com.valentinneagu.dndharness
   deploymentTarget:
-    iOS: "17.0"
+    iOS: "16.0"
 targets:
   DnDHost:
     type: application

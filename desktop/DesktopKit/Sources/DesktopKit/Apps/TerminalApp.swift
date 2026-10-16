@@ -1,4 +1,5 @@
 import GameController
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -92,14 +93,16 @@ struct TerminalAppView: View {
     }
 
     var body: some View {
-        TerminalControllerView(session: session, isFocused: isFocused) { [desktop, session] in
-            var arguments: [String: String] = [:]
-            if let cwd = session.workingDirectory { arguments[AppArgument.cwd] = cwd }
-            desktop.open(appID: AppID.terminal, arguments: arguments)
+        WithPerceptionTracking {
+            TerminalControllerView(session: session, isFocused: isFocused) { [desktop, session] in
+                var arguments: [String: String] = [:]
+                if let cwd = session.workingDirectory { arguments[AppArgument.cwd] = cwd }
+                desktop.open(appID: AppID.terminal, arguments: arguments)
+            }
+            .background(Color.black)
+            .onAppear { window.setTitle("Terminal") }
+            .nativeDropTarget(window: window.id) { [session] items, _ in session.insert(items) }
         }
-        .background(Color.black)
-        .onAppear { window.setTitle("Terminal") }
-        .nativeDropTarget(window: window.id) { [session] items, _ in session.insert(items) }
     }
 }
 

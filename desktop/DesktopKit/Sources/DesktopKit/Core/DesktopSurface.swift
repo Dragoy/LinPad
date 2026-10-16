@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 struct DesktopMenuItem {
@@ -13,10 +14,12 @@ struct DesktopSurface: View {
     let controller: DesktopController
 
     var body: some View {
-        // ~/Desktop as icons, drag and drop, and the full desktop menu: Desktop/ (DnD agent).
-        ZStack(alignment: .topLeading) {
-            DesktopFolderSurface(controller: controller, shellItems: menuItems)
-            WidgetLayer(controller: controller)
+        WithPerceptionTracking {
+            // ~/Desktop as icons, drag and drop, and the full desktop menu: Desktop/ (DnD agent).
+            ZStack(alignment: .topLeading) {
+                DesktopFolderSurface(controller: controller, shellItems: menuItems)
+                WidgetLayer(controller: controller)
+            }
         }
     }
 

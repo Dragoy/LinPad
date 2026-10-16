@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 enum CalendarSettings {
     static let weekNumbersKey = "calendar.showWeekNumbers"
@@ -21,34 +22,36 @@ struct MiniMonthView: View {
     private var cell: CGFloat { compact ? 22 : 30 }
 
     var body: some View {
-        let days = CalendarMath.monthGrid(for: month, calendar: calendar)
-        let grid = CalendarMath.gridInterval(for: month, calendar: calendar)
-        let busy = Set(store.events(in: grid).flatMap { busyDays(of: $0) })
-        return VStack(spacing: compact ? 2 : 4) {
-            header
-            HStack(spacing: 0) {
-                if showsWeekNumbers { Text("").frame(width: cell) }
-                ForEach(Array(CalendarMath.weekdaySymbols(calendar: calendar).enumerated()), id: \.offset) { _, symbol in
-                    Text(symbol).frame(width: cell)
-                }
-            }
-            .font(.system(size: compact ? 9 : 11, weight: .semibold))
-            .foregroundStyle(theme.secondaryText)
-            ForEach(0..<6, id: \.self) { week in
+        WithPerceptionTracking {
+            let days = CalendarMath.monthGrid(for: month, calendar: calendar)
+            let grid = CalendarMath.gridInterval(for: month, calendar: calendar)
+            let busy = Set(store.events(in: grid).flatMap { busyDays(of: $0) })
+            return VStack(spacing: compact ? 2 : 4) {
+                header
                 HStack(spacing: 0) {
-                    if showsWeekNumbers {
-                        Text("\(CalendarMath.weekNumber(of: days[week * 7], calendar: calendar))")
-                            .font(.system(size: compact ? 8 : 10).monospacedDigit())
-                            .foregroundStyle(theme.secondaryText.opacity(0.8))
-                            .frame(width: cell)
+                    if showsWeekNumbers { Text("").frame(width: cell) }
+                    ForEach(Array(CalendarMath.weekdaySymbols(calendar: calendar).enumerated()), id: \.offset) { _, symbol in
+                        Text(symbol).frame(width: cell)
                     }
-                    ForEach(days[(week * 7)..<(week * 7 + 7)], id: \.self) { day in
-                        dayCell(day, hasEvents: busy.contains(calendar.startOfDay(for: day)))
+                }
+                .font(.system(size: compact ? 9 : 11, weight: .semibold))
+                .foregroundStyle(theme.secondaryText)
+                ForEach(0..<6, id: \.self) { week in
+                    HStack(spacing: 0) {
+                        if showsWeekNumbers {
+                            Text("\(CalendarMath.weekNumber(of: days[week * 7], calendar: calendar))")
+                                .font(.system(size: compact ? 8 : 10).monospacedDigit())
+                                .foregroundStyle(theme.secondaryText.opacity(0.8))
+                                .frame(width: cell)
+                        }
+                        ForEach(days[(week * 7)..<(week * 7 + 7)], id: \.self) { day in
+                            dayCell(day, hasEvents: busy.contains(calendar.startOfDay(for: day)))
+                        }
                     }
                 }
             }
+            .accessibilityElement(children: .contain)
         }
-        .accessibilityElement(children: .contain)
     }
 
     @ViewBuilder private var header: some View {
@@ -126,27 +129,33 @@ struct UpcomingEventsList: View {
     @Environment(\.calendar) private var calendar
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            let events = store.upcoming(from: Self.minute(context.date), days: days, limit: limit, calendar: calendar)
-            VStack(alignment: .leading, spacing: compact ? 4 : 6) {
-                if events.isEmpty {
-                    Text("No upcoming events")
-                        .font(.system(size: compact ? 11 : 12))
-                        .foregroundStyle(theme.secondaryText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
-                    if index == 0 || !calendar.isDate(events[index - 1].start, inSameDayAs: event.start) {
-                        Text(Self.dayTitle(event.start, now: context.date, calendar: calendar))
-                            .font(.system(size: compact ? 10 : 11, weight: .semibold))
-                            .foregroundStyle(theme.secondaryText)
-                            .padding(.top, index == 0 ? 0 : 2)
+        WithPerceptionTracking {
+            TimelineView(.everyMinute) { context in
+                WithPerceptionTracking {
+                    let events = store.upcoming(from: Self.minute(context.date), days: days, limit: limit, calendar: calendar)
+                    VStack(alignment: .leading, spacing: compact ? 4 : 6) {
+                        if events.isEmpty {
+                            Text("No upcoming events")
+                                .font(.system(size: compact ? 11 : 12))
+                                .foregroundStyle(theme.secondaryText)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        ForEach(Array(events.enumerated()), id: \.element.id) { index, event in
+                            WithPerceptionTracking {
+                                if index == 0 || !calendar.isDate(events[index - 1].start, inSameDayAs: event.start) {
+                                    Text(Self.dayTitle(event.start, now: context.date, calendar: calendar))
+                                        .font(.system(size: compact ? 10 : 11, weight: .semibold))
+                                        .foregroundStyle(theme.secondaryText)
+                                        .padding(.top, index == 0 ? 0 : 2)
+                                }
+                                row(event)
+                            }
+                        }
                     }
-                    row(event)
                 }
             }
+            .accessibilityIdentifier("calendar.upcoming")
         }
-        .accessibilityIdentifier("calendar.upcoming")
     }
 
     private func row(_ event: CalendarEvent) -> some View {
@@ -205,52 +214,54 @@ struct CalendarPopover: View {
     private var store: CalendarStore { controller.calendarStore }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            TimelineView(.everyMinute) { context in
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(context.date.formatted(.dateTime.weekday(.wide)))
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(theme.accent)
-                    Text(context.date.formatted(.dateTime.day().month(.wide).year()))
-                        .font(.title3.weight(.semibold))
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 12) {
+                TimelineView(.everyMinute) { context in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(context.date.formatted(.dateTime.weekday(.wide)))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(theme.accent)
+                        Text(context.date.formatted(.dateTime.day().month(.wide).year()))
+                            .font(.title3.weight(.semibold))
+                    }
                 }
-            }
-            MiniMonthView(store: store, month: $month, selection: nil, showsWeekNumbers: showsWeekNumbers) { day in
-                openCalendar(on: day)
-            }
-            Divider().overlay(theme.separator)
-            UpcomingEventsList(store: store, limit: 5) { event in openCalendar(on: event.start) }
-            if store.access == .notDetermined {
-                Button("Show iPad Calendars…", systemImage: "calendar.badge.plus") {
-                    Task { await store.requestAccess() }
+                MiniMonthView(store: store, month: $month, selection: nil, showsWeekNumbers: showsWeekNumbers) { day in
+                    openCalendar(on: day)
                 }
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(theme.accent)
-                .buttonStyle(.plain)
-            }
-            HStack {
-                Toggle("Week Numbers", isOn: $showsWeekNumbers)
-                    .toggleStyle(.button)
-                    .font(.system(size: 12))
-                    .lineLimit(1)
-                    .fixedSize()
-                    .tint(theme.accent)
-                Spacer()
-                Button("Open Calendar") { openCalendar(on: Date()) }
-                    .font(.system(size: 12, weight: .semibold))
+                Divider().overlay(theme.separator)
+                UpcomingEventsList(store: store, limit: 5) { event in openCalendar(on: event.start) }
+                if store.access == .notDetermined {
+                    Button("Show iPad Calendars…", systemImage: "calendar.badge.plus") {
+                        Task { await store.requestAccess() }
+                    }
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(theme.accent)
                     .buttonStyle(.plain)
-                    .hoverEffect(.highlight)
-                    .accessibilityIdentifier("calendar.popover.open")
+                }
+                HStack {
+                    Toggle("Week Numbers", isOn: $showsWeekNumbers)
+                        .toggleStyle(.button)
+                        .font(.system(size: 12))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .tint(theme.accent)
+                    Spacer()
+                    Button("Open Calendar") { openCalendar(on: Date()) }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                        .buttonStyle(.plain)
+                        .hoverEffect(.highlight)
+                        .accessibilityIdentifier("calendar.popover.open")
+                }
             }
+            .foregroundStyle(theme.primaryText)
+            .padding(16)
+            .frame(width: showsWeekNumbers ? 280 : 256)
+            .background(theme.panelBackground.opacity(0.4))
+            .popoverCompactAdaptationCompat()
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("calendar.popover")
         }
-        .foregroundStyle(theme.primaryText)
-        .padding(16)
-        .frame(width: showsWeekNumbers ? 280 : 256)
-        .background(theme.panelBackground.opacity(0.4))
-        .presentationCompactAdaptation(.popover)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("calendar.popover")
     }
 
     private func openCalendar(on day: Date) {

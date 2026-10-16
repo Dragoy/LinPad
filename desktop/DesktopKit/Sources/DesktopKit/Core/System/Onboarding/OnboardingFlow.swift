@@ -1,5 +1,5 @@
 import Foundation
-import Observation
+import Perception
 
 /// The first-run screens, in order.
 enum OnboardingStep: String, CaseIterable, Codable, Identifiable, Sendable {
@@ -76,7 +76,7 @@ struct OnboardingChoices: Codable, Equatable, Sendable {
 /// closed resumes where it stopped. Once onboarding has completed, opening it again
 /// (Settings › About › Replay Welcome) is a replay: it starts at the beginning, is not
 /// resumable, and skipping it leaves the saved first-run choices alone.
-@Observable @MainActor
+@Perceptible @MainActor
 final class OnboardingFlow {
     static let completedKey = "desktop.onboarded"
     static let choicesKey = "desktop.firstRunChoices"
@@ -106,7 +106,7 @@ final class OnboardingFlow {
     /// Forward or back, for the direction of the step transition.
     private(set) var movedForward = true
 
-    @ObservationIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private let defaults: UserDefaults
 
     init(defaults: UserDefaults = .standard, current: OnboardingChoices? = nil) {
         self.defaults = defaults

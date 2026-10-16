@@ -1,10 +1,10 @@
 import Foundation
-import Observation
+import Perception
 import SwiftUI
 
 /// The colour theme axis: which theme is active (empty: the style's own colours), the
 /// list the guest knows about, and applying a theme to Linux apps (`ish-apply-colors`).
-@Observable @MainActor
+@Perceptible @MainActor
 final class ColorThemeStore {
     static let storageKey = "desktop.colorTheme"
 
@@ -18,12 +18,12 @@ final class ColorThemeStore {
     /// False on guests whose image predates colour themes; native colours still work.
     private(set) var guestSupportsThemes = true
 
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private var applyTask: Task<Void, Never>?
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private var applyTask: Task<Void, Never>?
     /// The desktop's handlers, for Settings (which has no controller).
-    @ObservationIgnored var onApplyRequest: ((String) -> Void)?
-    @ObservationIgnored var onPickerRequest: (() -> Void)?
-    @ObservationIgnored var onFindWallpapersRequest: ((ColorTheme) -> Void)?
+    @PerceptionIgnored var onApplyRequest: ((String) -> Void)?
+    @PerceptionIgnored var onPickerRequest: (() -> Void)?
+    @PerceptionIgnored var onFindWallpapersRequest: ((ColorTheme) -> Void)?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

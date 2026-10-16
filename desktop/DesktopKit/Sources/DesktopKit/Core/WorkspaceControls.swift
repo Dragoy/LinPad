@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -62,39 +63,41 @@ struct WorkspaceMenu: ViewModifier {
     @State private var confirmsDelete = false
 
     func body(content: Content) -> some View {
-        content
-            .contextMenu {
-                Button {
-                    name = manager.workspaceNames.indices.contains(index) ? manager.workspaceNames[index] : ""
-                    isRenaming = true
-                } label: { ThemedLabel("Rename…", systemImage: "pencil") }
-                Button { addAndSwitch(manager) } label: { ThemedLabel("New Workspace", systemImage: "plus") }
-                    .disabled(manager.workspaceCount >= WindowManager.maximumWorkspaces)
-                Divider()
-                Button(role: .destructive) {
-                    if manager.hasWindows(inWorkspace: index) {
-                        confirmsDelete = true
-                    } else {
+        WithPerceptionTracking {
+            content
+                .contextMenu {
+                    Button {
+                        name = manager.workspaceNames.indices.contains(index) ? manager.workspaceNames[index] : ""
+                        isRenaming = true
+                    } label: { ThemedLabel("Rename…", systemImage: "pencil") }
+                    Button { addAndSwitch(manager) } label: { ThemedLabel("New Workspace", systemImage: "plus") }
+                        .disabled(manager.workspaceCount >= WindowManager.maximumWorkspaces)
+                    Divider()
+                    Button(role: .destructive) {
+                        if manager.hasWindows(inWorkspace: index) {
+                            confirmsDelete = true
+                        } else {
+                            withAnimation(DesktopMotion.standard) { manager.removeWorkspace(index) }
+                        }
+                    } label: { ThemedLabel("Delete Workspace", systemImage: "trash") }
+                    .disabled(manager.workspaceCount <= 1)
+                }
+                .alert("Rename \(manager.title(ofWorkspace: index))", isPresented: $isRenaming) {
+                    TextField("Name", text: $name)
+                    Button("Cancel", role: .cancel) {}
+                    Button("Rename") { manager.renameWorkspace(index, to: name) }
+                } message: {
+                    Text("Leave empty to show the number.")
+                }
+                .confirmationDialog("Delete \(manager.title(ofWorkspace: index))?", isPresented: $confirmsDelete,
+                                    titleVisibility: .visible) {
+                    Button("Delete Workspace", role: .destructive) {
                         withAnimation(DesktopMotion.standard) { manager.removeWorkspace(index) }
                     }
-                } label: { ThemedLabel("Delete Workspace", systemImage: "trash") }
-                .disabled(manager.workspaceCount <= 1)
-            }
-            .alert("Rename \(manager.title(ofWorkspace: index))", isPresented: $isRenaming) {
-                TextField("Name", text: $name)
-                Button("Cancel", role: .cancel) {}
-                Button("Rename") { manager.renameWorkspace(index, to: name) }
-            } message: {
-                Text("Leave empty to show the number.")
-            }
-            .confirmationDialog("Delete \(manager.title(ofWorkspace: index))?", isPresented: $confirmsDelete,
-                                titleVisibility: .visible) {
-                Button("Delete Workspace", role: .destructive) {
-                    withAnimation(DesktopMotion.standard) { manager.removeWorkspace(index) }
+                } message: {
+                    Text("Its \(manager.windows(inWorkspace: index).count) windows move to \(index > 0 ? manager.title(ofWorkspace: index - 1) : manager.title(ofWorkspace: 1)).")
                 }
-            } message: {
-                Text("Its \(manager.windows(inWorkspace: index).count) windows move to \(index > 0 ? manager.title(ofWorkspace: index - 1) : manager.title(ofWorkspace: 1)).")
-            }
+        }
     }
 }
 

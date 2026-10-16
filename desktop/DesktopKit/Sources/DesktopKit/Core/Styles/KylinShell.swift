@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 // UKUI (openKylin) shell pieces, from themes/kylin/DESIGN-SPEC.md §2-3. Measurements follow
 // the spec's "Small" panel (48) and window-mode start menu (766 x 688).
@@ -51,47 +52,49 @@ struct KylinPanel: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            tile(label: "Start", identifier: "desktop.panel.applications", isActive: controller.isLauncherPresented) {
-                ThemeGlyph(ThemeIconNames.launcher, symbol: "circle.hexagongrid.fill", size: 22)
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(theme.accent)
-            } action: { controller.toggleLauncher() }
-            tile(label: "Search", identifier: "desktop.panel.search", isActive: false) {
-                ThemeGlyph(symbol: "magnifyingglass", size: 17).font(.system(size: 17, weight: .medium))
-            } action: { controller.toggleLauncher() }
-            tile(label: "Task View", identifier: "desktop.panel.overview", isActive: controller.isOverviewPresented) {
-                ThemeGlyph(symbol: "rectangle.on.rectangle", size: 16).font(.system(size: 16, weight: .medium))
-            } action: { controller.toggleOverview() }
-            theme.separator.frame(width: 1, height: 24)
-            ForEach(apps) { app in
-                KylinTaskButton(app: app, controller: controller)
-            }
-            Spacer(minLength: 32)
-            TilingButton(manager: manager)
-            WorkspaceSwitcher(manager: manager)
-            SystemMeters(monitor: controller.systemMonitor)
-            SystemTrayButtons(controller: controller)
-            KylinClock()
-            Button {
-                for window in manager.windowsInCurrentWorkspace() where !window.isMinimized {
-                    manager.minimize(window.id)
+        WithPerceptionTracking {
+            HStack(spacing: 4) {
+                tile(label: "Start", identifier: "desktop.panel.applications", isActive: controller.isLauncherPresented) {
+                    ThemeGlyph(ThemeIconNames.launcher, symbol: "circle.hexagongrid.fill", size: 22)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(theme.accent)
+                } action: { controller.toggleLauncher() }
+                tile(label: "Search", identifier: "desktop.panel.search", isActive: false) {
+                    ThemeGlyph(symbol: "magnifyingglass", size: 17).font(.system(size: 17, weight: .medium))
+                } action: { controller.toggleLauncher() }
+                tile(label: "Task View", identifier: "desktop.panel.overview", isActive: controller.isOverviewPresented) {
+                    ThemeGlyph(symbol: "rectangle.on.rectangle", size: 16).font(.system(size: 16, weight: .medium))
+                } action: { controller.toggleOverview() }
+                theme.separator.frame(width: 1, height: 24)
+                ForEach(apps) { app in
+                    KylinTaskButton(app: app, controller: controller)
                 }
-            } label: {
-                Color.clear.frame(width: 17, height: 48).contentShape(Rectangle())
+                Spacer(minLength: 32)
+                TilingButton(manager: manager)
+                WorkspaceSwitcher(manager: manager)
+                SystemMeters(monitor: controller.systemMonitor)
+                SystemTrayButtons(controller: controller)
+                KylinClock()
+                Button {
+                    for window in manager.windowsInCurrentWorkspace() where !window.isMinimized {
+                        manager.minimize(window.id)
+                    }
+                } label: {
+                    Color.clear.frame(width: 17, height: 48).contentShape(Rectangle())
+                }
+                .buttonStyle(KylinTileStyle(isActive: false))
+                .accessibilityLabel("Show Desktop")
             }
-            .buttonStyle(KylinTileStyle(isActive: false))
-            .accessibilityLabel("Show Desktop")
-        }
-        .foregroundStyle(theme.primaryText)
-        .padding(.leading, 8)
-        .frame(height: 48)
-        .background {
-            ZStack {
-                Rectangle().fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
-                theme.panelBackground
+            .foregroundStyle(theme.primaryText)
+            .padding(.leading, 8)
+            .frame(height: 48)
+            .background {
+                ZStack {
+                    Rectangle().fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+                    theme.panelBackground
+                }
+                .ignoresSafeArea(edges: .bottom)
             }
-            .ignoresSafeArea(edges: .bottom)
         }
     }
 
@@ -115,41 +118,43 @@ private struct KylinTaskButton: View {
     private var windows: [DesktopWindow] { manager.windowsInCurrentWorkspace().filter { $0.appID == app.id } }
 
     var body: some View {
-        let windows = windows
-        let ownsFocus = windows.contains { $0.id == manager.focusedWindowID && !$0.isMinimized }
-        Button(action: activate) {
-            AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 32)
-                .frame(width: 40, height: 40)
-                .overlay(alignment: .bottom) {
-                    if !windows.isEmpty {
-                        Capsule()
-                            .fill(ownsFocus ? theme.accent : theme.primaryText.opacity(0.3))
-                            .frame(width: windows.count > 1 ? 16 : 8, height: 4)
-                            .animation(.easeOut(duration: 0.2), value: windows.count)
+        WithPerceptionTracking {
+            let windows = windows
+            let ownsFocus = windows.contains { $0.id == manager.focusedWindowID && !$0.isMinimized }
+            Button(action: activate) {
+                AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 32)
+                    .frame(width: 40, height: 40)
+                    .overlay(alignment: .bottom) {
+                        if !windows.isEmpty {
+                            Capsule()
+                                .fill(ownsFocus ? theme.accent : theme.primaryText.opacity(0.3))
+                                .frame(width: windows.count > 1 ? 16 : 8, height: 4)
+                                .animation(.easeOut(duration: 0.2), value: windows.count)
+                        }
                     }
-                }
-                .background(RoundedRectangle(cornerRadius: KylinMetrics.tileRadius, style: .continuous)
-                    .fill(theme.primaryText.opacity(ownsFocus ? KylinMetrics.hoverAlpha : 0)))
-                .contentShape(Rectangle())
-        }
-        // A plain style here: a custom ButtonStyle combined with .contextMenu swallowed taps.
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .contextMenu { AppContextMenu(appID: app.id, controller: controller) } preview: {
-            if windows.isEmpty {
-                AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 96).padding(20)
-            } else {
-                WindowPreviewStrip(windows: windows, controller: controller)
+                    .background(RoundedRectangle(cornerRadius: KylinMetrics.tileRadius, style: .continuous)
+                        .fill(theme.primaryText.opacity(ownsFocus ? KylinMetrics.hoverAlpha : 0)))
+                    .contentShape(Rectangle())
             }
+            // A plain style here: a custom ButtonStyle combined with .contextMenu swallowed taps.
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .contextMenu { AppContextMenu(appID: app.id, controller: controller) } preview: {
+                if windows.isEmpty {
+                    AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 96).padding(20)
+                } else {
+                    WindowPreviewStrip(windows: windows, controller: controller)
+                }
+            }
+            .windowPreview(for: { windows }, controller: controller, arrowEdge: .bottom)
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                for window in windows { manager.taskbarTargets[window.id] = frame }
+            }
+            .help(app.name)
+            .accessibilityLabel(windows.count == 1 ? windows[0].title : app.name)
+            .accessibilityValue(windows.isEmpty ? "" : ownsFocus ? "Active" : "Running")
+            .accessibilityIdentifier(windows.isEmpty ? "desktop.dock.item" : "desktop.taskbar.item")
         }
-        .windowPreview(for: { windows }, controller: controller, arrowEdge: .bottom)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
-            for window in windows { manager.taskbarTargets[window.id] = frame }
-        }
-        .help(app.name)
-        .accessibilityLabel(windows.count == 1 ? windows[0].title : app.name)
-        .accessibilityValue(windows.isEmpty ? "" : ownsFocus ? "Active" : "Running")
-        .accessibilityIdentifier(windows.isEmpty ? "desktop.dock.item" : "desktop.taskbar.item")
     }
 
     /// This panel shows the current workspace, so its windows are the ones it cycles.
@@ -166,24 +171,26 @@ private struct KylinClock: View {
     @State private var isShowingCalendar = false
 
     var body: some View {
-        TimelineView(.everyMinute) { context in
-            Button { isShowingCalendar.toggle() } label: {
-                VStack(spacing: 1) {
-                    Text(context.date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute().weekday(.abbreviated)))
-                    Text(context.date.formatted(.iso8601.year().month().day().dateSeparator(.dash)))
-                        .foregroundStyle(theme.secondaryText)
+        WithPerceptionTracking {
+            TimelineView(.everyMinute) { context in
+                Button { isShowingCalendar.toggle() } label: {
+                    VStack(spacing: 1) {
+                        Text(context.date.formatted(.dateTime.hour(.twoDigits(amPM: .omitted)).minute().weekday(.abbreviated)))
+                        Text(context.date.formatted(.iso8601.year().month().day().dateSeparator(.dash)))
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                    .font(.system(size: 11, weight: .regular).monospacedDigit())
+                    .padding(.horizontal, 4)
+                    .contentShape(Rectangle())
                 }
-                .font(.system(size: 11, weight: .regular).monospacedDigit())
-                .padding(.horizontal, 4)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .calendarPopover(isPresented: $isShowingCalendar, controller: controller)
+                .accessibilityElement(children: .ignore)
+                .accessibilityLabel(context.date.formatted(date: .complete, time: .shortened))
+                .accessibilityAddTraits(.isButton)
+                .accessibilityIdentifier("desktop.panel.clock")
             }
-            .buttonStyle(.plain)
-            .hoverEffect(.highlight)
-            .calendarPopover(isPresented: $isShowingCalendar, controller: controller)
-            .accessibilityElement(children: .ignore)
-            .accessibilityLabel(context.date.formatted(date: .complete, time: .shortened))
-            .accessibilityAddTraits(.isButton)
-            .accessibilityIdentifier("desktop.panel.clock")
         }
     }
 }
@@ -212,27 +219,29 @@ struct KylinStartMenu: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            appList.frame(width: 312)
-            theme.separator.frame(width: 1)
-            favoritesPane.frame(maxWidth: .infinity)
-            theme.separator.frame(width: 1)
-            sidebar.frame(width: 56)
+        WithPerceptionTracking {
+            HStack(spacing: 0) {
+                appList.frame(width: 312)
+                theme.separator.frame(width: 1)
+                favoritesPane.frame(maxWidth: .infinity)
+                theme.separator.frame(width: 1)
+                sidebar.frame(width: 56)
+            }
+            // Shorter while the on-screen keyboard is up, so the list stays reachable above it.
+            .frame(width: 766, height: min(688, max(300, controller.windowManager.desktopSize.height - 16
+                                                         - controller.windowManager.keyboardOverlap)))
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
+                RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.panelBackground)
+            }
+            .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(theme.separator, lineWidth: 1) }
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .shadow(color: .black.opacity(0.2), radius: 20, y: 4)
+            .onAppear { if HardwareKeyboardMonitor.isAttached { Task { isSearchFocused = true } } }
+            .onChangeCompat(of: query) { _, _ in highlighted = 0 }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.launcher")
         }
-        // Shorter while the on-screen keyboard is up, so the list stays reachable above it.
-        .frame(width: 766, height: min(688, max(300, controller.windowManager.desktopSize.height - 16
-                                                     - controller.windowManager.keyboardOverlap)))
-        .background {
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.panelBlur ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.clear))
-            RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.panelBackground)
-        }
-        .overlay { RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(theme.separator, lineWidth: 1) }
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .shadow(color: .black.opacity(0.2), radius: 20, y: 4)
-        .onAppear { if HardwareKeyboardMonitor.isAttached { Task { isSearchFocused = true } } }
-        .onChange(of: query) { _, _ in highlighted = 0 }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.launcher")
     }
 
     private var appList: some View {
@@ -246,8 +255,10 @@ struct KylinStartMenu: View {
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
                     .onSubmit(launchHighlighted)
-                    .onKeyPress(.upArrow) { highlighted = max(highlighted - 1, 0); return .handled }
-                    .onKeyPress(.downArrow) { highlighted = min(highlighted + 1, max(results.count - 1, 0)); return .handled }
+                    .keyPressCompat(.upArrow, iOS16Active: isSearchFocused) { highlighted = max(highlighted - 1, 0); return true }
+                    .keyPressCompat(.downArrow, iOS16Active: isSearchFocused) {
+                        highlighted = min(highlighted + 1, max(results.count - 1, 0)); return true
+                    }
                     .accessibilityIdentifier("desktop.launcher.search")
             }
             .padding(.horizontal, 10)
@@ -260,23 +271,25 @@ struct KylinStartMenu: View {
             ScrollView {
                 LazyVStack(spacing: 2) {
                     ForEach(Array(results.enumerated()), id: \.element.id) { index, app in
-                        Button { launch(app) } label: {
-                            HStack(spacing: 10) {
-                                AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 32)
-                                Text(app.name).font(.system(size: 14))
-                                Spacer(minLength: 0)
+                        WithPerceptionTracking {
+                            Button { launch(app) } label: {
+                                HStack(spacing: 10) {
+                                    AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 32)
+                                    Text(app.name).font(.system(size: 14))
+                                    Spacer(minLength: 0)
+                                }
+                                .padding(.horizontal, 8)
+                                .frame(height: 40)
+                                .background(RoundedRectangle(cornerRadius: 4, style: .continuous)
+                                    .fill(index == highlighted ? theme.primaryText.opacity(0.08) : Color.clear))
+                                .contentShape(Rectangle())
                             }
-                            .padding(.horizontal, 8)
-                            .frame(height: 40)
-                            .background(RoundedRectangle(cornerRadius: 4, style: .continuous)
-                                .fill(index == highlighted ? theme.primaryText.opacity(0.08) : Color.clear))
-                            .contentShape(Rectangle())
+                            .buttonStyle(.plain)
+                            .hoverEffect(.highlight)
+                            .accessibilityLabel(app.name)
+                            .accessibilityAddTraits(index == highlighted ? .isSelected : [])
+                            .accessibilityIdentifier("desktop.launcher.app.\(app.id)")
                         }
-                        .buttonStyle(.plain)
-                        .hoverEffect(.highlight)
-                        .accessibilityLabel(app.name)
-                        .accessibilityAddTraits(index == highlighted ? .isSelected : [])
-                        .accessibilityIdentifier("desktop.launcher.app.\(app.id)")
                     }
                 }
                 .padding(.horizontal, 8)
@@ -297,16 +310,18 @@ struct KylinStartMenu: View {
             ScrollView {
                 LazyVGrid(columns: Array(repeating: GridItem(.fixed(88), spacing: 4), count: 4), spacing: 4) {
                     ForEach(favorites) { app in
-                        Button { launch(app) } label: {
-                            VStack(spacing: 6) {
-                                AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 48)
-                                Text(app.name).font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.center)
+                        WithPerceptionTracking {
+                            Button { launch(app) } label: {
+                                VStack(spacing: 6) {
+                                    AppIcon(iconName: controller.iconName(forAppID: app.id), url: controller.iconURL(forAppID: app.id), symbol: app.symbol, size: 48)
+                                    Text(app.name).font(.system(size: 12)).lineLimit(2).multilineTextAlignment(.center)
+                                }
+                                .frame(width: 88, height: 100)
+                                .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                             }
-                            .frame(width: 88, height: 100)
-                            .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .buttonStyle(KylinTileStyle(isActive: false))
+                            .accessibilityLabel(app.name)
                         }
-                        .buttonStyle(KylinTileStyle(isActive: false))
-                        .accessibilityLabel(app.name)
                     }
                 }
                 .padding(.horizontal, 12)

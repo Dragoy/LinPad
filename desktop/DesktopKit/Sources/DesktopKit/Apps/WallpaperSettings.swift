@@ -1,4 +1,5 @@
 import PhotosUI
+import Perception
 import SwiftUI
 import UniformTypeIdentifiers
 
@@ -21,73 +22,81 @@ struct WallpaperSettingsSection: View {
     ]
 
     var body: some View {
-        SettingsSection(title: "Wallpaper", symbol: "photo.on.rectangle") {
-            current
-            ThemedSeparator()
-            SettingsRow(title: "Apply to") {
-                Picker("Apply to", selection: $target) {
-                    ForEach(WallpaperTarget.allCases) { Text($0.title).tag($0) }
+        WithPerceptionTracking {
+            SettingsSection(title: "Wallpaper", symbol: "photo.on.rectangle") {
+                current
+                ThemedSeparator()
+                SettingsRow(title: "Apply to") {
+                    Picker("Apply to", selection: $target) {
+                        ForEach(WallpaperTarget.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.menu)
+                    .accessibilityIdentifier("wallpaper.target")
                 }
-                .pickerStyle(.menu)
-                .accessibilityIdentifier("wallpaper.target")
-            }
-            Text("Images").font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondaryText)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], spacing: 10) {
-                ForEach(store.library) { item in
-                    imageTile(item)
+                Text("Images").font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondaryText)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 112), spacing: 10)], spacing: 10) {
+                    ForEach(store.library) { item in
+                        WithPerceptionTracking {
+                            imageTile(item)
+                        }
+                    }
+                }
+                HStack(spacing: 10) {
+                    addButton("Photos", symbol: "photo") { showsPhotos = true }
+                        .accessibilityIdentifier("wallpaper.addPhotos")
+                    addButton("Files", symbol: "folder") { showsFiles = true }
+                    addButton("Linux Pictures", symbol: "externaldrive") { showsGuest = true }
+                }
+                Text("Gradients and colors").font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondaryText)
+                HStack(spacing: 10) {
+                    ForEach(DesktopWallpaper.allCases, id: \.self) { gradient in
+                        WithPerceptionTracking {
+                            swatch(.gradient(gradient.rawValue)) { gradient.view }
+                                .accessibilityLabel(gradient.rawValue.capitalized)
+                                .accessibilityIdentifier("wallpaper.gradient.\(gradient.rawValue)")
+                        }
+                    }
+                    ForEach(Self.colors, id: \.self) { rgb in
+                        WithPerceptionTracking {
+                            swatch(.color(rgb)) { Color(rgb: rgb) }
+                                .accessibilityLabel(String(format: "Color %06X", rgb))
+                        }
+                    }
+                    ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
+                        .labelsHidden()
+                        .onChangeCompat(of: customColor) { _, color in apply(.color(color.rgbValue)) }
+                }
+                ThemedSeparator()
+                SettingsRow(title: "Fill") {
+                    Picker("Fill", selection: Binding(tracking: { store.settings.fill },
+                                                      set: { fill in store.update { $0.fill = fill } })) {
+                        ForEach(WallpaperFill.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .fixedSize()
+                }
+                SettingsRow(title: "Different wallpaper per workspace") {
+                    Toggle("Per workspace", isOn: Binding(tracking: { store.settings.usesPerWorkspace },
+                                                          set: { on in store.update { $0.usesPerWorkspace = on } }))
+                        .labelsHidden().tint(theme.accent)
+                }
+                ThemedSeparator()
+                slideshow
+                if let errorMessage {
+                    InlineBanner(kind: .error, message: errorMessage, onDismiss: { self.errorMessage = nil })
                 }
             }
-            HStack(spacing: 10) {
-                addButton("Photos", symbol: "photo") { showsPhotos = true }
-                    .accessibilityIdentifier("wallpaper.addPhotos")
-                addButton("Files", symbol: "folder") { showsFiles = true }
-                addButton("Linux Pictures", symbol: "externaldrive") { showsGuest = true }
+            .photosPicker(isPresented: $showsPhotos, selection: Binding(get: { nil }, set: { item in
+                if let item { importPhoto(item) }
+            }), matching: .images, photoLibrary: .shared())
+            .fileImporter(isPresented: $showsFiles, allowedContentTypes: [.image]) { result in
+                importFile(result)
             }
-            Text("Gradients and colors").font(.subheadline.weight(.semibold)).foregroundStyle(theme.secondaryText)
-            HStack(spacing: 10) {
-                ForEach(DesktopWallpaper.allCases, id: \.self) { gradient in
-                    swatch(.gradient(gradient.rawValue)) { gradient.view }
-                        .accessibilityLabel(gradient.rawValue.capitalized)
-                        .accessibilityIdentifier("wallpaper.gradient.\(gradient.rawValue)")
+            .sheet(isPresented: $showsGuest) {
+                GuestPicturesPicker(host: host) { url in
+                    showsGuest = false
+                    importGuest(url)
                 }
-                ForEach(Self.colors, id: \.self) { rgb in
-                    swatch(.color(rgb)) { Color(rgb: rgb) }
-                        .accessibilityLabel(String(format: "Color %06X", rgb))
-                }
-                ColorPicker("Custom color", selection: $customColor, supportsOpacity: false)
-                    .labelsHidden()
-                    .onChange(of: customColor) { _, color in apply(.color(color.rgbValue)) }
-            }
-            ThemedSeparator()
-            SettingsRow(title: "Fill") {
-                Picker("Fill", selection: Binding(get: { store.settings.fill },
-                                                  set: { fill in store.update { $0.fill = fill } })) {
-                    ForEach(WallpaperFill.allCases) { Text($0.title).tag($0) }
-                }
-                .pickerStyle(.segmented)
-                .fixedSize()
-            }
-            SettingsRow(title: "Different wallpaper per workspace") {
-                Toggle("Per workspace", isOn: Binding(get: { store.settings.usesPerWorkspace },
-                                                      set: { on in store.update { $0.usesPerWorkspace = on } }))
-                    .labelsHidden().tint(theme.accent)
-            }
-            ThemedSeparator()
-            slideshow
-            if let errorMessage {
-                InlineBanner(kind: .error, message: errorMessage, onDismiss: { self.errorMessage = nil })
-            }
-        }
-        .photosPicker(isPresented: $showsPhotos, selection: Binding(get: { nil }, set: { item in
-            if let item { importPhoto(item) }
-        }), matching: .images, photoLibrary: .shared())
-        .fileImporter(isPresented: $showsFiles, allowedContentTypes: [.image]) { result in
-            importFile(result)
-        }
-        .sheet(isPresented: $showsGuest) {
-            GuestPicturesPicker(host: host) { url in
-                showsGuest = false
-                importGuest(url)
             }
         }
     }
@@ -121,13 +130,13 @@ struct WallpaperSettingsSection: View {
     private var slideshow: some View {
         VStack(alignment: .leading, spacing: 10) {
             SettingsRow(title: "Slideshow") {
-                Toggle("Slideshow", isOn: Binding(get: { store.settings.slideshow.isEnabled },
+                Toggle("Slideshow", isOn: Binding(tracking: { store.settings.slideshow.isEnabled },
                                                   set: { on in store.update { $0.slideshow.isEnabled = on } }))
                     .labelsHidden().tint(theme.accent)
             }
             if store.settings.slideshow.isEnabled {
                 SettingsRow(title: "Pictures") {
-                    Picker("Pictures", selection: Binding(get: { store.settings.slideshow.source },
+                    Picker("Pictures", selection: Binding(tracking: { store.settings.slideshow.source },
                                                           set: { source in store.update { $0.slideshow.source = source } })) {
                         Text("Favorites").tag(WallpaperSlideshow.Source.favorites)
                         Text("All images").tag(WallpaperSlideshow.Source.library)
@@ -135,14 +144,14 @@ struct WallpaperSettingsSection: View {
                     .pickerStyle(.segmented).fixedSize()
                 }
                 SettingsRow(title: "Change every") {
-                    Picker("Interval", selection: Binding(get: { store.settings.slideshow.interval },
+                    Picker("Interval", selection: Binding(tracking: { store.settings.slideshow.interval },
                                                           set: { value in store.update { $0.slideshow.interval = value } })) {
                         ForEach(Self.intervals, id: \.1) { Text($0.0).tag($0.1) }
                     }
                     .pickerStyle(.menu)
                 }
                 SettingsRow(title: "Shuffle") {
-                    Toggle("Shuffle", isOn: Binding(get: { store.settings.slideshow.shuffle },
+                    Toggle("Shuffle", isOn: Binding(tracking: { store.settings.slideshow.shuffle },
                                                     set: { on in store.update { $0.slideshow.shuffle = on } }))
                         .labelsHidden().tint(theme.accent)
                 }
@@ -263,18 +272,20 @@ struct WallpaperThumbnail: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.3)
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
+        WithPerceptionTracking {
+            ZStack {
+                Color.black.opacity(0.3)
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
             }
-        }
-        .task(id: item.id) {
-            let cache = store.cache
-            let item = item
-            image = await Task.detached(priority: .utility) {
-                cache.downsampled(fileName: item.fileName, id: item.id, maxPixel: 320, suffix: "thumb")
-            }.value
+            .task(id: item.id) {
+                let cache = store.cache
+                let item = item
+                image = await Task.detached(priority: .utility) {
+                    cache.downsampled(fileName: item.fileName, id: item.id, maxPixel: 320, suffix: "thumb")
+                }.value
+            }
         }
     }
 }
@@ -292,35 +303,37 @@ struct GuestPicturesPicker: View {
     private static let extensions: Set<String> = ["jpg", "jpeg", "png", "heic", "webp"]
 
     var body: some View {
-        NavigationStack {
-            Group {
-                if images.isEmpty {
-                    ContentUnavailableView("No pictures", systemImage: "photo.on.rectangle.angled",
-                                           description: Text("Put images in ~/Pictures to see them here."))
-                } else {
-                    ScrollView {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                            ForEach(images, id: \.self) { url in
-                                Button { pick(url) } label: {
-                                    VStack(spacing: 4) {
-                                        LocalImageThumbnail(url: url).frame(height: 96)
-                                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                        Text(url.lastPathComponent).font(.caption).lineLimit(1)
+        WithPerceptionTracking {
+            NavigationStack {
+                Group {
+                    if images.isEmpty {
+                        CompatUnavailableView("No pictures", systemImage: "photo.on.rectangle.angled",
+                                              message: "Put images in ~/Pictures to see them here.")
+                    } else {
+                        ScrollView {
+                            LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                                ForEach(images, id: \.self) { url in
+                                    Button { pick(url) } label: {
+                                        VStack(spacing: 4) {
+                                            LocalImageThumbnail(url: url).frame(height: 96)
+                                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                            Text(url.lastPathComponent).font(.caption).lineLimit(1)
+                                        }
                                     }
+                                    .buttonStyle(.plain)
                                 }
-                                .buttonStyle(.plain)
                             }
+                            .padding()
                         }
-                        .padding()
                     }
                 }
+                .navigationTitle("Linux Pictures")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
             }
-            .navigationTitle("Linux Pictures")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } } }
+            .frame(minWidth: 520, minHeight: 420)
+            .task { images = findImages() }
         }
-        .frame(minWidth: 520, minHeight: 420)
-        .task { images = findImages() }
     }
 
     private func findImages() -> [URL] {
@@ -341,15 +354,17 @@ private struct LocalImageThumbnail: View {
     @State private var image: UIImage?
 
     var body: some View {
-        ZStack {
-            Color.black.opacity(0.3)
-            if let image { Image(uiImage: image).resizable().scaledToFill() }
-        }
-        .task(id: url) {
-            let url = url
-            image = await Task.detached(priority: .utility) {
-                WallpaperImageCache.thumbnail(url: url, maxPixel: 300).map(UIImage.init(cgImage:))
-            }.value
+        WithPerceptionTracking {
+            ZStack {
+                Color.black.opacity(0.3)
+                if let image { Image(uiImage: image).resizable().scaledToFill() }
+            }
+            .task(id: url) {
+                let url = url
+                image = await Task.detached(priority: .utility) {
+                    WallpaperImageCache.thumbnail(url: url, maxPixel: 300).map(UIImage.init(cgImage:))
+                }.value
+            }
         }
     }
 }

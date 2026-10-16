@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Whisker-menu style launcher: search on top, categories on the left, apps on the right.
 struct LauncherView: View {
@@ -28,55 +29,57 @@ struct LauncherView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            searchField
-                .padding(12)
-            theme.separator.frame(height: 1)
-            HStack(spacing: 0) {
-                categoryList
-                    .frame(width: 168)
-                theme.separator.frame(width: 1)
-                appList
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                searchField
+                    .padding(12)
+                theme.separator.frame(height: 1)
+                HStack(spacing: 0) {
+                    categoryList
+                        .frame(width: 168)
+                    theme.separator.frame(width: 1)
+                    appList
+                }
+                theme.separator.frame(height: 1)
+                footer
             }
-            theme.separator.frame(height: 1)
-            footer
+            .frame(width: 540, height: 440)
+            .background {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
+                    .fill(theme.panelBackground)
+            }
+            .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
+                    .strokeBorder(theme.separator, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
+            .onAppear {
+                if HardwareKeyboardMonitor.isAttached { Task { isSearchFocused = true } }
+            }
+            .onChangeCompat(of: query) { _, _ in highlighted = 0 }
+            .onChangeCompat(of: category) { _, _ in highlighted = 0 }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.launcher")
         }
-        .frame(width: 540, height: 440)
-        .background {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
-                .fill(.ultraThinMaterial)
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
-                .fill(theme.panelBackground)
-        }
-        .clipShape(RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 2, style: .continuous)
-                .strokeBorder(theme.separator, lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.45), radius: 28, y: 14)
-        .onAppear {
-            if HardwareKeyboardMonitor.isAttached { Task { isSearchFocused = true } }
-        }
-        .onChange(of: query) { _, _ in highlighted = 0 }
-        .onChange(of: category) { _, _ in highlighted = 0 }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.launcher")
     }
 
-    private func moveHighlight(by step: Int) -> KeyPress.Result {
+    private func moveHighlight(by step: Int) -> Bool {
         let count = results.count
-        guard count > 0 else { return .handled }
+        guard count > 0 else { return true }
         highlighted = min(max(highlighted + step, 0), count - 1)
-        return .handled
+        return true
     }
 
     /// Tab walks the categories, so the whole menu works from the keyboard.
-    private func cycleCategory(by step: Int) -> KeyPress.Result {
+    private func cycleCategory(by step: Int) -> Bool {
         let all: [AppCategory?] = [nil] + categories.map(Optional.some)
         let index = all.firstIndex(of: category) ?? 0
         category = all[((index + step) % all.count + all.count) % all.count]
         query = ""
-        return .handled
+        return true
     }
 
     private var searchField: some View {
@@ -92,11 +95,9 @@ struct LauncherView: View {
                 .textInputAutocapitalization(.never)
                 .submitLabel(.go)
                 .onSubmit(launchHighlighted)
-                .onKeyPress(.upArrow) { moveHighlight(by: -1) }
-                .onKeyPress(.downArrow) { moveHighlight(by: 1) }
-                .onKeyPress(.tab, phases: .down) { press in
-                    cycleCategory(by: press.modifiers.contains(.shift) ? -1 : 1)
-                }
+                .keyPressCompat(.upArrow, iOS16Active: isSearchFocused) { moveHighlight(by: -1) }
+                .keyPressCompat(.downArrow, iOS16Active: isSearchFocused) { moveHighlight(by: 1) }
+                .tabKeyPressCompat(iOS16Active: isSearchFocused) { shift in cycleCategory(by: shift ? -1 : 1) }
                 .accessibilityIdentifier("desktop.launcher.search")
             if !query.isEmpty {
                 Button {
@@ -138,16 +139,18 @@ struct LauncherView: View {
             ScrollViewReader { proxy in
                 LazyVStack(spacing: 2) {
                     ForEach(Array(results.enumerated()), id: \.element.id) { index, app in
-                        AppRow(app: app, iconName: controller.iconName(forAppID: app.id),
-                               isHighlighted: index == highlighted) {
-                            launch(app)
+                        WithPerceptionTracking {
+                            AppRow(app: app, iconName: controller.iconName(forAppID: app.id),
+                                   isHighlighted: index == highlighted) {
+                                launch(app)
+                            }
+                            .contextMenu { AppContextMenu(appID: app.id, controller: controller) }
+                            .id(app.id)
                         }
-                        .contextMenu { AppContextMenu(appID: app.id, controller: controller) }
-                        .id(app.id)
                     }
                 }
                 .padding(8)
-                .onChange(of: highlighted) { _, index in
+                .onChangeCompat(of: highlighted) { _, index in
                     if results.indices.contains(index) { proxy.scrollTo(results[index].id) }
                 }
             }
@@ -203,25 +206,27 @@ private struct CategoryRow: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 8) {
-                ThemeGlyph(symbol: symbol, size: 14)
-                    .frame(width: 18)
-                    .foregroundStyle(isSelected ? theme.accent : theme.secondaryText)
-                Text(title)
-                    .foregroundStyle(theme.primaryText)
-                Spacer(minLength: 0)
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 8) {
+                    ThemeGlyph(symbol: symbol, size: 14)
+                        .frame(width: 18)
+                        .foregroundStyle(isSelected ? theme.accent : theme.secondaryText)
+                    Text(title)
+                        .foregroundStyle(theme.primaryText)
+                    Spacer(minLength: 0)
+                }
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .padding(.horizontal, 10)
+                .frame(height: 32)
+                .background(isSelected ? theme.accent.opacity(0.2) : .clear,
+                            in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                .contentShape(Rectangle())
             }
-            .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-            .padding(.horizontal, 10)
-            .frame(height: 32)
-            .background(isSelected ? theme.accent.opacity(0.2) : .clear,
-                        in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityAddTraits(isSelected ? .isSelected : [])
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
 }
 
@@ -233,35 +238,37 @@ private struct AppRow: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                AppIcon(iconName: iconName, url: app.iconURL, symbol: app.symbol, size: 34)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(app.name)
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(theme.primaryText)
-                    Text(app.category.rawValue)
-                        .font(.system(size: 11))
-                        .foregroundStyle(theme.secondaryText)
+        WithPerceptionTracking {
+            Button(action: action) {
+                HStack(spacing: 12) {
+                    AppIcon(iconName: iconName, url: app.iconURL, symbol: app.symbol, size: 34)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(app.name)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(theme.primaryText)
+                        Text(app.category.rawValue)
+                            .font(.system(size: 11))
+                            .foregroundStyle(theme.secondaryText)
+                    }
+                    Spacer(minLength: 0)
+                    if isHighlighted {
+                        Image(systemName: "return")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(theme.secondaryText)
+                    }
                 }
-                Spacer(minLength: 0)
-                if isHighlighted {
-                    Image(systemName: "return")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.secondaryText)
-                }
+                .padding(.horizontal, 10)
+                .frame(height: 48)
+                .background(isHighlighted ? theme.accent.opacity(0.18) : .clear,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .contentShape(Rectangle())
             }
-            .padding(.horizontal, 10)
-            .frame(height: 48)
-            .background(isHighlighted ? theme.accent.opacity(0.18) : .clear,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .accessibilityLabel(app.name)
+            .accessibilityAddTraits(isHighlighted ? .isSelected : [])
+            .accessibilityIdentifier("desktop.launcher.app.\(app.id)")
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .accessibilityLabel(app.name)
-        .accessibilityAddTraits(isHighlighted ? .isSelected : [])
-        .accessibilityIdentifier("desktop.launcher.app.\(app.id)")
     }
 }
 
@@ -272,19 +279,21 @@ private struct FooterButton: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Button(action: action) {
-            ThemeGlyph(symbol: symbol, size: 14)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(theme.primaryText)
-                .frame(width: 32, height: 30)
-                .background(theme.primaryText.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                .contentShape(Rectangle())
+        WithPerceptionTracking {
+            Button(action: action) {
+                ThemeGlyph(symbol: symbol, size: 14)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(theme.primaryText)
+                    .frame(width: 32, height: 30)
+                    .background(theme.primaryText.opacity(0.08), in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .hoverEffect(.highlight)
+            .help(label)
+            .accessibilityLabel(label)
+            .accessibilityIdentifier("desktop.launcher.\(label == "Settings" ? "settings" : symbol)")
         }
-        .buttonStyle(.plain)
-        .hoverEffect(.highlight)
-        .help(label)
-        .accessibilityLabel(label)
-        .accessibilityIdentifier("desktop.launcher.\(label == "Settings" ? "settings" : symbol)")
     }
 }
 

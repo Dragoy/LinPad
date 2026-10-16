@@ -1,7 +1,7 @@
 import SwiftUI
-import Observation
+import Perception
 
-@Observable @MainActor
+@Perceptible @MainActor
 final class WindowSwitcherModel {
     private(set) var windowIDs: [UUID] = []
     private(set) var selection = 0
@@ -49,43 +49,47 @@ struct WindowSwitcherView: View {
     private var switcher: WindowSwitcherModel { controller.switcher }
 
     var body: some View {
-        let windows = switcher.windowIDs.compactMap(manager.window(withID:))
-        VStack(spacing: 12) {
-            ScrollViewReader { proxy in
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 10) {
-                        ForEach(windows) { window in
-                            card(for: window, isSelected: window.id == switcher.selectedWindowID)
-                                .id(window.id)
+        WithPerceptionTracking {
+            let windows = switcher.windowIDs.compactMap(manager.window(withID:))
+            VStack(spacing: 12) {
+                ScrollViewReader { proxy in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(windows) { window in
+                                WithPerceptionTracking {
+                                    card(for: window, isSelected: window.id == switcher.selectedWindowID)
+                                        .id(window.id)
+                                }
+                            }
                         }
+                        .padding(14)
                     }
-                    .padding(14)
+                    .onChangeCompat(of: switcher.selection) { _, _ in
+                        if let id = switcher.selectedWindowID { proxy.scrollTo(id, anchor: .center) }
+                    }
                 }
-                .onChange(of: switcher.selection) { _, _ in
-                    if let id = switcher.selectedWindowID { proxy.scrollTo(id, anchor: .center) }
+                .frame(maxWidth: min(CGFloat(windows.count) * (Self.cardWidth + 10) + 18, 1000))
+                if !switcher.commitsOnModifierRelease {
+                    Text("Return to switch · Esc to cancel")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(theme.secondaryText)
+                        .padding(.bottom, 10)
                 }
             }
-            .frame(maxWidth: min(CGFloat(windows.count) * (Self.cardWidth + 10) + 18, 1000))
-            if !switcher.commitsOnModifierRelease {
-                Text("Return to switch · Esc to cancel")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(theme.secondaryText)
-                    .padding(.bottom, 10)
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 6, style: .continuous)
+                    .fill(theme.panelBackground.opacity(1))
             }
+            .overlay {
+                RoundedRectangle(cornerRadius: theme.cornerRadius + 6, style: .continuous)
+                    .strokeBorder(theme.separator, lineWidth: 1)
+            }
+            .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.switcher")
+            .accessibilityLabel("Window switcher")
         }
-        .fixedSize(horizontal: false, vertical: true)
-        .background {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 6, style: .continuous)
-                .fill(theme.panelBackground.opacity(1))
-        }
-        .overlay {
-            RoundedRectangle(cornerRadius: theme.cornerRadius + 6, style: .continuous)
-                .strokeBorder(theme.separator, lineWidth: 1)
-        }
-        .shadow(color: .black.opacity(0.5), radius: 30, y: 12)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.switcher")
-        .accessibilityLabel("Window switcher")
     }
 
     private func card(for window: DesktopWindow, isSelected: Bool) -> some View {
@@ -144,16 +148,18 @@ struct WindowThumbnail: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        ZStack {
-            theme.windowBackground
-            if let image = controller.thumbnailImage(for: window) {
-                Image(uiImage: image)
-                    .resizable()
-                    .interpolation(.medium)
-                    .aspectRatio(contentMode: .fit)
-            } else {
-                AppIcon(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
-                        symbol: window.symbol, size: 48)
+        WithPerceptionTracking {
+            ZStack {
+                theme.windowBackground
+                if let image = controller.thumbnailImage(for: window) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .interpolation(.medium)
+                        .aspectRatio(contentMode: .fit)
+                } else {
+                    AppIcon(iconName: controller.iconName(forAppID: window.appID), url: controller.iconURL(forAppID: window.appID),
+                            symbol: window.symbol, size: 48)
+                }
             }
         }
     }

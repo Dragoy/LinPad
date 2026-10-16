@@ -1,5 +1,5 @@
 import GameController
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -7,14 +7,14 @@ import UIKit
 /// cannot report (Option-Tab's switcher commits when Option is let go). GameController sees
 /// the keyboard below the responder chain, so this works while a terminal or Linux window
 /// holds first responder.
-@Observable @MainActor
+@Perceptible @MainActor
 final class HardwareKeyboardMonitor {
     private(set) var isConnected = GCKeyboard.coalesced != nil
     private(set) var hasPointer = GCMouse.current != nil
 
     var hasPointerOrKeyboard: Bool { isConnected || hasPointer }
-    @ObservationIgnored var onSwitcherModifierReleased: (() -> Void)?
-    @ObservationIgnored private var observers: [NSObjectProtocol] = []
+    @PerceptionIgnored var onSwitcherModifierReleased: (() -> Void)?
+    @PerceptionIgnored private var observers: [NSObjectProtocol] = []
 
     /// Search fields focus themselves only with a hardware keyboard: on touch alone, opening
     /// a menu must not throw the on-screen keyboard over the panel. Some Bluetooth keyboards

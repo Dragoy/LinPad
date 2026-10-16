@@ -262,21 +262,41 @@ final class ISHMicBridge: @unchecked Sendable {
 
     private func startMicIfAllowed() {
         guard isCapturing, engine == nil, !interrupted else { return }
-        switch AVAudioApplication.shared.recordPermission {
-        case .granted:
-            startMic()
-        case .undetermined:
-            AVAudioApplication.requestRecordPermission { granted in
-                self.engineQueue.async {
-                    if granted {
-                        self.startMic()
-                    } else {
-                        self.showDeniedNotice()
+        if #available(iOS 17.0, *) {
+            switch AVAudioApplication.shared.recordPermission {
+            case .granted:
+                startMic()
+            case .undetermined:
+                AVAudioApplication.requestRecordPermission { granted in
+                    self.engineQueue.async {
+                        if granted {
+                            self.startMic()
+                        } else {
+                            self.showDeniedNotice()
+                        }
                     }
                 }
+            default:
+                showDeniedNotice()
             }
-        default:
-            showDeniedNotice()
+        } else {
+            let session = AVAudioSession.sharedInstance()
+            switch session.recordPermission {
+            case .granted:
+                startMic()
+            case .undetermined:
+                session.requestRecordPermission { granted in
+                    self.engineQueue.async {
+                        if granted {
+                            self.startMic()
+                        } else {
+                            self.showDeniedNotice()
+                        }
+                    }
+                }
+            default:
+                showDeniedNotice()
+            }
         }
     }
 

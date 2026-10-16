@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// Freedesktop icon names (Icon Naming Specification) for the shell's own controls and
@@ -60,10 +61,12 @@ struct ThemeGlyph: View {
     }
 
     var body: some View {
-        if let icon = icons?.icon(names) {
-            ThemeIconImageView(icon: icon, side: (size * 1.2).rounded())
-        } else {
-            Image(systemName: symbol)
+        WithPerceptionTracking {
+            if let icon = icons?.icon(names) {
+                ThemeIconImageView(icon: icon, side: (size * 1.2).rounded())
+            } else {
+                Image(systemName: symbol)
+            }
         }
     }
 }
@@ -77,14 +80,16 @@ struct ThemeIcon: View {
     @Environment(\.desktopIcons) private var icons
 
     var body: some View {
-        if let icon = icons?.icon(names) {
-            ThemeIconImageView(icon: icon, side: size)
-        } else {
-            Image(systemName: symbol)
-                .font(.system(size: size * 0.8))
-                .foregroundStyle(tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.foreground))
-                .frame(width: size, height: size)
-                .accessibilityHidden(true)
+        WithPerceptionTracking {
+            if let icon = icons?.icon(names) {
+                ThemeIconImageView(icon: icon, side: size)
+            } else {
+                Image(systemName: symbol)
+                    .font(.system(size: size * 0.8))
+                    .foregroundStyle(tint.map(AnyShapeStyle.init) ?? AnyShapeStyle(.foreground))
+                    .frame(width: size, height: size)
+                    .accessibilityHidden(true)
+            }
         }
     }
 }
@@ -94,12 +99,14 @@ private struct ThemeIconImageView: View {
     let side: CGFloat
 
     var body: some View {
-        Image(uiImage: icon.image)
-            .renderingMode(icon.isSymbolic ? .template : .original)
-            .resizable()
-            .interpolation(.high)
-            .aspectRatio(contentMode: .fit)
-            .frame(width: side, height: side)
-            .accessibilityHidden(true)
+        WithPerceptionTracking {
+            Image(uiImage: icon.image)
+                .renderingMode(icon.isSymbolic ? .template : .original)
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: side, height: side)
+                .accessibilityHidden(true)
+        }
     }
 }

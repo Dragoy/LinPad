@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Minimize, maximize and close in the active style's shape. Each control keeps a touch
 /// target of at least 32 x 40 pt (44 x 40 where the style's layout allows) whatever its
@@ -15,25 +16,27 @@ struct WindowButtons: View {
     @State private var isHovering = false
 
     var body: some View {
-        HStack(spacing: 0) {
-            switch shape {
-            case .era:
-                if let skin {
-                    EraWindowButtons(skin: skin, kinds: EraWindowButtons.kinds(for: skin, side: side),
-                                     isMaximized: window.isMaximized, isFocused: isFocused, metrics: manager.metrics,
-                                     titleBarHeight: manager.titleBarHeight, perform: perform)
+        WithPerceptionTracking {
+            HStack(spacing: 0) {
+                switch shape {
+                case .era:
+                    if let skin {
+                        EraWindowButtons(skin: skin, kinds: EraWindowButtons.kinds(for: skin, side: side),
+                                         isMaximized: window.isMaximized, isFocused: isFocused, metrics: manager.metrics,
+                                         titleBarHeight: manager.titleBarHeight, perform: perform)
+                    }
+                case .trafficLight:
+                    light(.close)
+                    light(.minimize)
+                    light(.maximize)
+                default:
+                    button(.minimize)
+                    button(.maximize)
+                    button(.close)
                 }
-            case .trafficLight:
-                light(.close)
-                light(.minimize)
-                light(.maximize)
-            default:
-                button(.minimize)
-                button(.maximize)
-                button(.close)
             }
+            .onHover { isHovering = $0 }
         }
-        .onHover { isHovering = $0 }
     }
 
     private func perform(_ kind: WindowButtonKind) {
@@ -101,14 +104,16 @@ private struct ChromeButton: View {
     @State private var isHovered = false
 
     var body: some View {
-        Button(action: action) {
-            glyph
-                .frame(width: buttonWidth, height: manager.titleBarHeight)
-                .background(captionFill)
-                .contentShape(Rectangle())
+        WithPerceptionTracking {
+            Button(action: action) {
+                glyph
+                    .frame(width: buttonWidth, height: manager.titleBarHeight)
+                    .background(captionFill)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { isHovered = $0 }
         }
-        .buttonStyle(.plain)
-        .onHover { isHovered = $0 }
     }
 
     private var buttonWidth: CGFloat {
@@ -182,23 +187,25 @@ private struct TrafficLight: View {
     let action: () -> Void
 
     var body: some View {
-        Button(action: action) {
-            Circle()
-                .fill(isActive ? color : Color(white: 0.35))
-                .overlay(Circle().strokeBorder(.black.opacity(0.18), lineWidth: 0.5))
-                .overlay {
-                    if showsGlyph {
-                        Image(systemName: glyph)
-                            .font(.system(size: 7, weight: .black))
-                            .foregroundStyle(.black.opacity(0.6))
+        WithPerceptionTracking {
+            Button(action: action) {
+                Circle()
+                    .fill(isActive ? color : Color(white: 0.35))
+                    .overlay(Circle().strokeBorder(.black.opacity(0.18), lineWidth: 0.5))
+                    .overlay {
+                        if showsGlyph {
+                            Image(systemName: glyph)
+                                .font(.system(size: 7, weight: .black))
+                                .foregroundStyle(.black.opacity(0.6))
+                        }
                     }
-                }
-                .frame(width: metrics.isTouch ? 18 : 13, height: metrics.isTouch ? 18 : 13)
-                // Lights sit 8 pt apart as on macOS; touch mode spreads them to 40 pt targets.
-                .frame(width: metrics.isTouch ? 40 : 26, height: metrics.titleBarHeight)
-                .contentShape(Rectangle())
+                    .frame(width: metrics.isTouch ? 18 : 13, height: metrics.isTouch ? 18 : 13)
+                    // Lights sit 8 pt apart as on macOS; touch mode spreads them to 40 pt targets.
+                    .frame(width: metrics.isTouch ? 40 : 26, height: metrics.titleBarHeight)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .buttonStyle(.plain)
     }
 
     private var color: Color {
@@ -243,7 +250,7 @@ private struct SnapLayoutsFlyout: ViewModifier {
                     isPresented = false
                     manager.snap(windowID, to: zone)
                 }
-                .presentationCompactAdaptation(.popover)
+                .popoverCompactAdaptationCompat()
             }
     }
 }
@@ -259,14 +266,16 @@ private struct SnapLayoutsGrid: View {
     ]
 
     var body: some View {
-        HStack(spacing: 10) {
-            ForEach(layouts.indices, id: \.self) { index in
-                layout(layouts[index])
+        WithPerceptionTracking {
+            HStack(spacing: 10) {
+                ForEach(layouts.indices, id: \.self) { index in
+                    layout(layouts[index])
+                }
             }
+            .padding(12)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("desktop.snapLayouts")
         }
-        .padding(12)
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("desktop.snapLayouts")
     }
 
     private func layout(_ zones: [SnapZone]) -> some View {

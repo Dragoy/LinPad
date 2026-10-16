@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 
@@ -19,7 +20,7 @@ enum ProcessSortKey: String {
 }
 
 @MainActor
-@Observable
+@Perceptible
 final class TaskManagerModel {
     private static let loadMarker = "__DK_LOADAVG__"
     private static let memoryMarker = "__DK_MEMINFO__"
@@ -34,8 +35,8 @@ final class TaskManagerModel {
         """
     static let refreshInterval: Duration = .seconds(2)
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let window: any WindowHandle
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let window: any WindowHandle
 
     private(set) var processes: [ProcessRow] = []
     private(set) var load: SystemLoad?
@@ -175,51 +176,53 @@ struct TaskManagerAppView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            summary
-            AppToolbar {
-                AppSearchField(prompt: "Filter processes", text: $model.searchText)
-                    .frame(maxWidth: 260)
-                Spacer(minLength: 8)
-                ToolbarTextButton(title: "End Process", symbol: "stop.circle") {
-                    if let process = model.selectedProcess { pendingSignal = (process, .terminate) }
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                summary
+                AppToolbar {
+                    AppSearchField(prompt: "Filter processes", text: model.binding(\.searchText))
+                        .frame(maxWidth: 260)
+                    Spacer(minLength: 8)
+                    ToolbarTextButton(title: "End Process", symbol: "stop.circle") {
+                        if let process = model.selectedProcess { pendingSignal = (process, .terminate) }
+                    }
+                    .disabled(model.selectedProcess == nil)
+                    ToolbarTextButton(title: "Force Kill", symbol: "xmark.octagon") {
+                        if let process = model.selectedProcess { pendingSignal = (process, .kill) }
+                    }
+                    .disabled(model.selectedProcess == nil)
+                    ToolbarIconButton("arrow.clockwise", help: "Refresh Now") {
+                        Task { await model.refresh() }
+                    }
                 }
-                .disabled(model.selectedProcess == nil)
-                ToolbarTextButton(title: "Force Kill", symbol: "xmark.octagon") {
-                    if let process = model.selectedProcess { pendingSignal = (process, .kill) }
+                if let message = model.errorMessage {
+                    InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
                 }
-                .disabled(model.selectedProcess == nil)
-                ToolbarIconButton("arrow.clockwise", help: "Refresh Now") {
-                    Task { await model.refresh() }
+                processTable
+                AppStatusBar {
+                    Text("\(model.processes.count) processes")
+                    if let tasks = model.load?.tasks {
+                        Text("Running/total: \(tasks)")
+                    }
+                    Spacer(minLength: 0)
+                    Text("Refreshes every 2 s")
                 }
             }
-            if let message = model.errorMessage {
-                InlineBanner(kind: .error, message: message, onDismiss: { model.errorMessage = nil })
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .task(id: isWindowVisible) {
+                if isWindowVisible { await model.poll() }
             }
-            processTable
-            AppStatusBar {
-                Text("\(model.processes.count) processes")
-                if let tasks = model.load?.tasks {
-                    Text("Running/total: \(tasks)")
+            .alert(signalTitle, isPresented: isSignalPresented, presenting: pendingSignal) { pending in
+                Button(pending.signal.title, role: .destructive) {
+                    model.send(pending.signal, to: pending.process)
                 }
-                Spacer(minLength: 0)
-                Text("Refreshes every 2 s")
+                Button("Cancel", role: .cancel) {}
+            } message: { pending in
+                Text(pending.signal == .terminate
+                     ? "Sends SIGTERM to “\(pending.process.name)” (PID \(pending.process.pid)), asking it to quit."
+                     : "Sends SIGKILL to “\(pending.process.name)” (PID \(pending.process.pid)). Unsaved work will be lost.")
             }
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .task(id: isWindowVisible) {
-            if isWindowVisible { await model.poll() }
-        }
-        .alert(signalTitle, isPresented: isSignalPresented, presenting: pendingSignal) { pending in
-            Button(pending.signal.title, role: .destructive) {
-                model.send(pending.signal, to: pending.process)
-            }
-            Button("Cancel", role: .cancel) {}
-        } message: { pending in
-            Text(pending.signal == .terminate
-                 ? "Sends SIGTERM to “\(pending.process.name)” (PID \(pending.process.pid)), asking it to quit."
-                 : "Sends SIGKILL to “\(pending.process.name)” (PID \(pending.process.pid)). Unsaved work will be lost.")
         }
     }
 
@@ -321,7 +324,9 @@ struct TaskManagerAppView: View {
                 ScrollView {
                     LazyVStack(spacing: 0) {
                         ForEach(Array(rows.enumerated()), id: \.element.id) { index, process in
-                            row(process, striped: index.isMultiple(of: 2))
+                            WithPerceptionTracking {
+                                row(process, striped: index.isMultiple(of: 2))
+                            }
                         }
                     }
                 }
@@ -410,16 +415,18 @@ private struct UsageBar: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .leading) {
-                Capsule().fill(theme.primaryText.opacity(0.1))
-                Capsule()
-                    .fill(tint)
-                    .frame(width: max(4, proxy.size.width * min(max(fraction, 0), 1)))
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(theme.primaryText.opacity(0.1))
+                    Capsule()
+                        .fill(tint)
+                        .frame(width: max(4, proxy.size.width * min(max(fraction, 0), 1)))
+                }
             }
+            .frame(height: 8)
+            .animation(.easeOut(duration: 0.3), value: fraction)
         }
-        .frame(height: 8)
-        .animation(.easeOut(duration: 0.3), value: fraction)
     }
 }
 

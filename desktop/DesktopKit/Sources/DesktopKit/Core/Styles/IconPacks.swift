@@ -1,4 +1,4 @@
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -11,7 +11,7 @@ struct IconPack: Identifiable, Hashable {
 /// The icon pack choice, independent of the desktop style (themes/CONTRACT.md,
 /// `ish-apply-style --icons`). The guest renders the pack into the current style's icon
 /// cache, so the shell's own icons and Linux apps change together.
-@Observable @MainActor
+@Perceptible @MainActor
 final class IconPackStore {
     static let overridePath = "/usr/share/ish/icon-theme"
     static let previewDirectory = "/usr/share/ish/icon-previews"
@@ -103,50 +103,57 @@ struct IconPackSettingsSection: View {
     private let columns = [GridItem(.adaptive(minimum: 150), spacing: 10)]
 
     var body: some View {
-        SettingsSection(title: "Icons", symbol: "square.grid.3x3.square") {
-            if !store.isSupported {
-                Text("This Linux system's theming package predates icon packs. Update it to choose icons separately from the style.")
-                    .font(.caption)
-                    .foregroundStyle(theme.secondaryText)
-            } else {
-                LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
-                    tile(id: nil, title: "Match Style", subtitle: style.displayName, images: [])
-                    ForEach(store.packs) { pack in
-                        tile(id: pack.id, title: pack.name, subtitle: pack.id == pack.name ? nil : pack.id,
-                             images: store.previews[pack.id] ?? [])
+        WithPerceptionTracking {
+            SettingsSection(title: "Icons", symbol: "square.grid.3x3.square") {
+                if !store.isSupported {
+                    Text("This Linux system's theming package predates icon packs. Update it to choose icons separately from the style.")
+                        .font(.caption)
+                        .foregroundStyle(theme.secondaryText)
+                } else {
+                    LazyVGrid(columns: columns, alignment: .leading, spacing: 10) {
+                        // Lazy cells are built outside this body's tracking scope, so each tracks on its own.
+                        WithPerceptionTracking {
+                            tile(id: nil, title: "Match Style", subtitle: style.displayName, images: [])
+                        }
+                        ForEach(store.packs) { pack in
+                            WithPerceptionTracking {
+                                tile(id: pack.id, title: pack.name, subtitle: pack.id == pack.name ? nil : pack.id,
+                                     images: store.previews[pack.id] ?? [])
+                            }
+                        }
                     }
-                }
-                if let applying = store.applying {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text("Rendering \(applying.isEmpty ? "the style's icons" : applying) for the desktop and Linux apps…")
-                            .font(.caption)
+                    if let applying = store.applying {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text("Rendering \(applying.isEmpty ? "the style's icons" : applying) for the desktop and Linux apps…")
+                                .font(.caption)
+                        }
+                        .accessibilityIdentifier("iconPacks.progress")
+                    } else if store.isLoading || store.isRenderingPreviews {
+                        HStack(spacing: 8) {
+                            ProgressView()
+                            Text(store.isRenderingPreviews ? "Drawing previews…" : "Looking for icon packs…").font(.caption)
+                        }
                     }
-                    .accessibilityIdentifier("iconPacks.progress")
-                } else if store.isLoading || store.isRenderingPreviews {
-                    HStack(spacing: 8) {
-                        ProgressView()
-                        Text(store.isRenderingPreviews ? "Drawing previews…" : "Looking for icon packs…").font(.caption)
+                    if let error = store.errorMessage {
+                        Text(error).font(.caption).foregroundStyle(.red)
                     }
+                    Button {
+                        desktop.open(appID: AppID.packages, arguments: [PackagesApp.queryArgument: "icon-theme"])
+                    } label: {
+                        Label("Get More Icon Packs…", systemImage: "shippingbox")
+                    }
+                    .accessibilityIdentifier("iconPacks.getMore")
+                    Text("Icon packs apply to the desktop and to Linux apps started afterwards, and stay when you change the style.")
+                        .font(.caption)
+                        .foregroundStyle(theme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                if let error = store.errorMessage {
-                    Text(error).font(.caption).foregroundStyle(.red)
-                }
-                Button {
-                    desktop.open(appID: AppID.packages, arguments: [PackagesApp.queryArgument: "icon-theme"])
-                } label: {
-                    Label("Get More Icon Packs…", systemImage: "shippingbox")
-                }
-                .accessibilityIdentifier("iconPacks.getMore")
-                Text("Icon packs apply to the desktop and to Linux apps started afterwards, and stay when you change the style.")
-                    .font(.caption)
-                    .foregroundStyle(theme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
             }
-        }
-        .task { await store.load(host: host) }
-        .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in
-            Task { await store.load(host: host) }
+            .task { await store.load(host: host) }
+            .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in
+                Task { await store.load(host: host) }
+            }
         }
     }
 

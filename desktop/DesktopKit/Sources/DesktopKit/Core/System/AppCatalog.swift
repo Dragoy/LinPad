@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 /// One optional app from the guest's catalog (/usr/share/linpad/catalog.json, listed by
@@ -35,7 +36,7 @@ struct CatalogPack: Decodable, Identifiable, Equatable {
 /// The guest's optional-apps catalog (`linpad-apps list --json`) with installed state, for
 /// onboarding's bookkeeping and install links. Installs and removals go through LinPad
 /// Store's queue (StoreModel), so they show their progress in the Store.
-@Observable @MainActor
+@Perceptible @MainActor
 final class AppCatalogModel {
     private(set) var packs: [CatalogPack] = []
     private(set) var hasLoaded = false
@@ -43,13 +44,13 @@ final class AppCatalogModel {
     /// Nil when the catalog loaded; otherwise why it did not (e.g. an older Linux system).
     private(set) var unavailableReason: String?
 
-    @ObservationIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let host: any LinuxHost
 
     private init(host: any LinuxHost) {
         self.host = host
     }
 
-    @ObservationIgnored private static var models: [ObjectIdentifier: AppCatalogModel] = [:]
+    @PerceptionIgnored private static var models: [ObjectIdentifier: AppCatalogModel] = [:]
 
     static func shared(for host: any LinuxHost) -> AppCatalogModel {
         let key = ObjectIdentifier(host)

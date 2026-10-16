@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// What the Option key does in a Linux text field: Alt, for the shortcuts of terminals and
 /// editors (readline's Alt-B, VS Code's Alt-Up), or characters, for dead keys and accents
@@ -55,26 +56,28 @@ struct LinuxOptionKeySettingsView: View {
     @AppStorage(LinuxOptionKeyMode.altAppsKey) private var altApps = LinuxOptionKeyMode.defaultAltApps
 
     var body: some View {
-        SettingsRow(title: "Option key in Linux apps") {
-            Picker("Option key in Linux apps", selection: $mode) {
-                ForEach(LinuxOptionKeyMode.allCases) { Text($0.title).tag($0) }
+        WithPerceptionTracking {
+            SettingsRow(title: "Option key in Linux apps") {
+                Picker("Option key in Linux apps", selection: $mode) {
+                    ForEach(LinuxOptionKeyMode.allCases) { Text($0.title).tag($0) }
+                }
+                .labelsHidden()
+                .accessibilityIdentifier("settings.linuxOptionKey")
             }
-            .labelsHidden()
-            .accessibilityIdentifier("settings.linuxOptionKey")
-        }
-        if mode == .automatic {
-            SettingsRow(title: "Apps where Option is Alt") {
-                TextField("App ids", text: $altApps)
-                    .textInputAutocapitalization(.never)
-                    .autocorrectionDisabled()
-                    .multilineTextAlignment(.trailing)
-                    .font(.callout.monospaced())
-                    .accessibilityIdentifier("settings.linuxOptionKeyAltApps")
+            if mode == .automatic {
+                SettingsRow(title: "Apps where Option is Alt") {
+                    TextField("App ids", text: $altApps)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .multilineTextAlignment(.trailing)
+                        .font(.callout.monospaced())
+                        .accessibilityIdentifier("settings.linuxOptionKeyAltApps")
+                }
             }
+            Text("In a Linux text field, Option either types characters (Option-E then E is é, Option-S is ß) or reaches the app as Alt, for shortcuts such as Alt-B in a terminal or Alt-↑ in VS Code. Option with an arrow, Delete, Return or Tab is always Alt. App ids are Wayland app ids, separated by commas.")
+                .font(.caption)
+                .foregroundStyle(theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        Text("In a Linux text field, Option either types characters (Option-E then E is é, Option-S is ß) or reaches the app as Alt, for shortcuts such as Alt-B in a terminal or Alt-↑ in VS Code. Option with an arrow, Delete, Return or Tab is always Alt. App ids are Wayland app ids, separated by commas.")
-            .font(.caption)
-            .foregroundStyle(theme.secondaryText)
-            .fixedSize(horizontal: false, vertical: true)
     }
 }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 import UniformTypeIdentifiers
 
@@ -166,15 +167,17 @@ struct DropBadge: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        Label("\(operation == .copy ? "Copy" : "Move") to \(AppPath.lastComponent(directory))",
-              systemImage: operation == .copy ? "plus.circle.fill" : "arrow.right.circle.fill")
-            .font(.system(size: 12, weight: .semibold))
-            .foregroundStyle(.white)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(Capsule().fill(operation == .copy ? Color.green.opacity(0.9) : theme.accent))
-            .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
-            .accessibilityIdentifier("files.drop-badge")
+        WithPerceptionTracking {
+            Label("\(operation == .copy ? "Copy" : "Move") to \(AppPath.lastComponent(directory))",
+                  systemImage: operation == .copy ? "plus.circle.fill" : "arrow.right.circle.fill")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(operation == .copy ? Color.green.opacity(0.9) : theme.accent))
+                .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
+                .accessibilityIdentifier("files.drop-badge")
+        }
     }
 }
 
@@ -194,64 +197,66 @@ struct FilePropertiesSheet: View {
     private static let bits = [("Read", 4), ("Write", 2), ("Execute", 1)]
 
     var body: some View {
-        NavigationStack {
-            Form {
-                if let properties {
-                    Section {
-                        row("Name", AppPath.lastComponent(path))
-                        row("Kind", properties.kind.capitalized)
-                        row("Location", AppPath.parent(of: path))
-                        row("Size", ByteFormat.string(properties.size)
-                            + (properties.itemCount.map { ", \($0) item\($0 == 1 ? "" : "s")" } ?? ""))
-                    }
-                    Section("Owner") {
-                        row("User", properties.owner)
-                        row("Group", properties.group)
-                    }
-                    Section("Permissions") {
-                        ForEach(Self.classes, id: \.0) { name, shift in
-                            HStack {
-                                Text(name).frame(width: 70, alignment: .leading)
-                                ForEach(Self.bits, id: \.0) { bitName, bit in
-                                    Toggle(bitName, isOn: binding(bit << shift))
-                                        .toggleStyle(.button)
-                                        .accessibilityIdentifier("properties.\(name.lowercased()).\(bitName.lowercased())")
+        WithPerceptionTracking {
+            NavigationStack {
+                Form {
+                    if let properties {
+                        Section {
+                            row("Name", AppPath.lastComponent(path))
+                            row("Kind", properties.kind.capitalized)
+                            row("Location", AppPath.parent(of: path))
+                            row("Size", ByteFormat.string(properties.size)
+                                + (properties.itemCount.map { ", \($0) item\($0 == 1 ? "" : "s")" } ?? ""))
+                        }
+                        Section("Owner") {
+                            row("User", properties.owner)
+                            row("Group", properties.group)
+                        }
+                        Section("Permissions") {
+                            ForEach(Self.classes, id: \.0) { name, shift in
+                                HStack {
+                                    Text(name).frame(width: 70, alignment: .leading)
+                                    ForEach(Self.bits, id: \.0) { bitName, bit in
+                                        Toggle(bitName, isOn: binding(bit << shift))
+                                            .toggleStyle(.button)
+                                            .accessibilityIdentifier("properties.\(name.lowercased()).\(bitName.lowercased())")
+                                    }
                                 }
                             }
+                            row("Mode", String(format: "%04o", mode) + "  " + Self.symbolic(mode, kind: properties.permissions.first ?? "-"))
                         }
-                        row("Mode", String(format: "%04o", mode) + "  " + Self.symbolic(mode, kind: properties.permissions.first ?? "-"))
+                        Section("Dates") {
+                            dateRow("Modified", properties.modified)
+                            dateRow("Accessed", properties.accessed)
+                            dateRow("Changed", properties.changed)
+                        }
+                    } else if let error {
+                        Text(error).foregroundStyle(.red)
+                    } else {
+                        ProgressView()
                     }
-                    Section("Dates") {
-                        dateRow("Modified", properties.modified)
-                        dateRow("Accessed", properties.accessed)
-                        dateRow("Changed", properties.changed)
+                }
+                .navigationTitle("\(AppPath.lastComponent(path)) Properties")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onDone) }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Apply") { apply() }
+                            .disabled(properties == nil || properties?.mode == mode)
                     }
-                } else if let error {
-                    Text(error).foregroundStyle(.red)
-                } else {
-                    ProgressView()
                 }
             }
-            .navigationTitle("\(AppPath.lastComponent(path)) Properties")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Cancel", action: onDone) }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Apply") { apply() }
-                        .disabled(properties == nil || properties?.mode == mode)
+            .task {
+                do {
+                    let loaded = try await operations.properties(of: path)
+                    properties = loaded
+                    mode = loaded.mode
+                } catch {
+                    self.error = error.localizedDescription
                 }
             }
+            .frame(minWidth: 420, minHeight: 520)
         }
-        .task {
-            do {
-                let loaded = try await operations.properties(of: path)
-                properties = loaded
-                mode = loaded.mode
-            } catch {
-                self.error = error.localizedDescription
-            }
-        }
-        .frame(minWidth: 420, minHeight: 520)
     }
 
     private func binding(_ bit: Int) -> Binding<Bool> {

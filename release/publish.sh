@@ -33,7 +33,7 @@ REPO=fspecii/LinPad
 RAW=https://raw.githubusercontent.com/$REPO/main
 BUNDLE_ID=com.valentinneagu.ish.arm64
 APP_GROUP=group.$BUNDLE_ID
-MIN_OS=17.0
+MIN_OS=16.0
 export PATH=/opt/homebrew/opt/lld/bin:/opt/homebrew/opt/llvm/bin:$PATH
 
 usage() { sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-2}"; }

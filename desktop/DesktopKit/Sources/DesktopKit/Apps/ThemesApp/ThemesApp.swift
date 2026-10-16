@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Colour themes, light/dark pairing, a theme editor, styling knobs and saved looks.
 enum ThemesApp {
@@ -59,28 +60,30 @@ struct ThemesAppView: View {
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            sidebar
-            theme.separator.frame(width: 1)
-            Group {
-                if let controller {
-                    content(controller)
-                } else {
-                    Text("Themes needs the desktop.").foregroundStyle(theme.secondaryText)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        WithPerceptionTracking {
+            HStack(spacing: 0) {
+                sidebar
+                theme.separator.frame(width: 1)
+                Group {
+                    if let controller {
+                        content(controller)
+                    } else {
+                        Text("Themes needs the desktop.").foregroundStyle(theme.secondaryText)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .onAppear { context.window.setTitle("Themes") }
+            .onDisappear { controller?.colorThemes.previewID = nil }
+            .onChangeCompat(of: section) { _, _ in controller?.colorThemes.previewID = nil }
+            .onReceive(NotificationCenter.default.publisher(for: ThemesApp.sectionRequested)) { note in
+                if let requested = (note.userInfo?[ThemesApp.sectionArgument] as? String).flatMap(ThemesSection.init) { section = requested }
+            }
+            .task { if let controller { await controller.colorThemes.load(host: context.host) } }
         }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .onAppear { context.window.setTitle("Themes") }
-        .onDisappear { controller?.colorThemes.previewID = nil }
-        .onChange(of: section) { _, _ in controller?.colorThemes.previewID = nil }
-        .onReceive(NotificationCenter.default.publisher(for: ThemesApp.sectionRequested)) { note in
-            if let requested = (note.userInfo?[ThemesApp.sectionArgument] as? String).flatMap(ThemesSection.init) { section = requested }
-        }
-        .task { if let controller { await controller.colorThemes.load(host: context.host) } }
     }
 
     private var sidebar: some View {
@@ -180,52 +183,54 @@ struct ThemeGalleryView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            toolbar
-            if installFailed, let message {
-                // The whole reason, with a retry; it used to be cut to one caption line.
-                InlineBanner(kind: .error, message: message, actionTitle: "Retry", action: install,
-                             onDismiss: { installFailed = false; self.message = nil })
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
-            }
-            theme.separator.frame(height: 1)
-            ScrollView {
-                if filter == .all && search.isEmpty {
-                    DesktopThemesSection(controller: controller)
-                        .padding([.horizontal, .top], 18)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                toolbar
+                if installFailed, let message {
+                    // The whole reason, with a retry; it used to be cut to one caption line.
+                    InlineBanner(kind: .error, message: message, actionTitle: "Retry", action: install,
+                                 onDismiss: { installFailed = false; self.message = nil })
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 8)
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
+                theme.separator.frame(height: 1)
+                ScrollView {
                     if filter == .all && search.isEmpty {
-                        card(nil)
+                        DesktopThemesSection(controller: controller)
+                            .padding([.horizontal, .top], 18)
                     }
-                    ForEach(visible) { card($0) }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
+                        if filter == .all && search.isEmpty {
+                            card(nil)
+                        }
+                        ForEach(visible) { candidate in WithPerceptionTracking { card(candidate) } }
+                    }
+                    .padding(18)
                 }
-                .padding(18)
-            }
-            .overlay {
-                if visible.isEmpty && !(filter == .all && search.isEmpty) {
-                    AppEmptyState(symbol: filter == .favorites && search.isEmpty ? "star" : "magnifyingglass",
-                                  title: filter == .favorites && search.isEmpty ? "No favorite themes yet" : "No matching themes",
-                                  message: filter == .favorites && search.isEmpty
-                                      ? "Tap the star on a theme to keep it here."
-                                      : "Try another name, or switch the filter to All.")
+                .overlay {
+                    if visible.isEmpty && !(filter == .all && search.isEmpty) {
+                        AppEmptyState(symbol: filter == .favorites && search.isEmpty ? "star" : "magnifyingglass",
+                                      title: filter == .favorites && search.isEmpty ? "No favorite themes yet" : "No matching themes",
+                                      message: filter == .favorites && search.isEmpty
+                                          ? "Tap the star on a theme to keep it here."
+                                          : "Try another name, or switch the filter to All.")
+                    }
                 }
             }
-        }
-        .alert("Install Theme from Git", isPresented: $isInstallPromptPresented) {
-            TextField("https://github.com/…/omarchy-…-theme", text: $installURL)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Cancel", role: .cancel) {}
-            Button("Install") { install() }
-        } message: {
-            Text("Compatible with Omarchy community themes (credit: omacom/omarchy, MIT). Only colors.toml, icons.theme, light.mode and background images are taken from the repository.")
-        }
-        .sheet(item: $sharing) { ShareThemeSheet(theme: $0) }
-        .confirmationDialog("Remove \(pendingRemoval?.name ?? "")?", isPresented: Binding(
-            get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }), titleVisibility: .visible) {
-            Button("Remove Theme", role: .destructive) { if let pendingRemoval { remove(pendingRemoval) } }
+            .alert("Install Theme from Git", isPresented: $isInstallPromptPresented) {
+                TextField("https://github.com/…/omarchy-…-theme", text: $installURL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Cancel", role: .cancel) {}
+                Button("Install") { install() }
+            } message: {
+                Text("Compatible with Omarchy community themes (credit: omacom/omarchy, MIT). Only colors.toml, icons.theme, light.mode and background images are taken from the repository.")
+            }
+            .sheet(item: $sharing) { ShareThemeSheet(theme: $0) }
+            .confirmationDialog("Remove \(pendingRemoval?.name ?? "")?", isPresented: Binding(
+                get: { pendingRemoval != nil }, set: { if !$0 { pendingRemoval = nil } }), titleVisibility: .visible) {
+                Button("Remove Theme", role: .destructive) { if let pendingRemoval { remove(pendingRemoval) } }
+            }
         }
     }
 
@@ -365,7 +370,7 @@ struct ThemeAppearanceView: View {
     private var appearance: ThemeAppearance { controller.themeAppearance }
 
     private func binding<Value>(_ keyPath: WritableKeyPath<ThemeAppearance, Value>) -> Binding<Value> {
-        Binding(get: { controller.themeAppearance[keyPath: keyPath] }, set: { value in
+        Binding(tracking: { controller.themeAppearance[keyPath: keyPath] }, set: { value in
             var copy = controller.themeAppearance
             copy[keyPath: keyPath] = value
             copy.isEnabled = true
@@ -374,88 +379,92 @@ struct ThemeAppearanceView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                SettingsSection(title: "Mode", symbol: "circle.lefthalf.filled") {
-                    Toggle("Switch themes by light and dark", isOn: Binding(get: { appearance.isEnabled }, set: { enabled in
-                        var copy = appearance
-                        copy.isEnabled = enabled
-                        if enabled, copy.lightThemeID.isEmpty, copy.darkThemeID.isEmpty { seedPair(&copy) }
-                        controller.updateThemeAppearance(copy)
-                    }))
-                    .accessibilityIdentifier("themes.mode.enabled")
-                    Picker("Mode", selection: binding(\.mode)) {
-                        ForEach(ThemeAppearanceMode.allCases) { Text($0.title).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
-                    .accessibilityIdentifier("themes.mode")
-                    Text("Now: \(store.name(of: store.currentID))")
-                        .font(.callout.weight(.medium))
-                        .accessibilityIdentifier("themes.mode.current")
-                    if appearance.mode == .scheduled {
-                        HStack(spacing: 16) {
-                            DatePicker("Light from", selection: timeBinding(\.schedule.lightStart), displayedComponents: .hourAndMinute)
-                            DatePicker("Dark from", selection: timeBinding(\.schedule.darkStart), displayedComponents: .hourAndMinute)
+        WithPerceptionTracking {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    SettingsSection(title: "Mode", symbol: "circle.lefthalf.filled") {
+                        Toggle("Switch themes by light and dark", isOn: Binding(tracking: { appearance.isEnabled }, set: { enabled in
+                            var copy = appearance
+                            copy.isEnabled = enabled
+                            if enabled, copy.lightThemeID.isEmpty, copy.darkThemeID.isEmpty { seedPair(&copy) }
+                            controller.updateThemeAppearance(copy)
+                        }))
+                        .accessibilityIdentifier("themes.mode.enabled")
+                        Picker("Mode", selection: binding(\.mode)) {
+                            ForEach(ThemeAppearanceMode.allCases) { Text($0.title).tag($0) }
                         }
-                        Text("Fixed times stand in for sunrise and sunset, so no location is needed.")
-                            .font(.caption).foregroundStyle(theme.secondaryText)
-                    }
-                    if appearance.mode == .automatic {
-                        Text("Follows iPadOS: the light theme in Light Mode, the dark one in Dark Mode.")
-                            .font(.caption).foregroundStyle(theme.secondaryText)
-                    }
-                }
-                SettingsSection(title: "Pair", symbol: "rectangle.on.rectangle") {
-                    SettingsRow(title: "Light theme") {
-                        Picker("Light theme", selection: binding(\.lightThemeID)) {
-                            Text("Style Colors").tag("")
-                            ForEach(store.themes.filter { !$0.isDark }) { Text($0.name).tag($0.id) }
+                        .pickerStyle(.segmented)
+                        .accessibilityIdentifier("themes.mode")
+                        Text("Now: \(store.name(of: store.currentID))")
+                            .font(.callout.weight(.medium))
+                            .accessibilityIdentifier("themes.mode.current")
+                        if appearance.mode == .scheduled {
+                            HStack(spacing: 16) {
+                                DatePicker("Light from", selection: timeBinding(\.schedule.lightStart), displayedComponents: .hourAndMinute)
+                                DatePicker("Dark from", selection: timeBinding(\.schedule.darkStart), displayedComponents: .hourAndMinute)
+                            }
+                            Text("Fixed times stand in for sunrise and sunset, so no location is needed.")
+                                .font(.caption).foregroundStyle(theme.secondaryText)
                         }
-                        .labelsHidden()
-                        .accessibilityIdentifier("themes.lightTheme")
-                    }
-                    SettingsRow(title: "Dark theme") {
-                        Picker("Dark theme", selection: binding(\.darkThemeID)) {
-                            Text("Style Colors").tag("")
-                            ForEach(store.themes.filter(\.isDark)) { Text($0.name).tag($0.id) }
+                        if appearance.mode == .automatic {
+                            Text("Follows iPadOS: the light theme in Light Mode, the dark one in Dark Mode.")
+                                .font(.caption).foregroundStyle(theme.secondaryText)
                         }
-                        .labelsHidden()
-                        .accessibilityIdentifier("themes.darkTheme")
                     }
-                    HStack(spacing: 14) {
-                        previewTile(appearance.lightThemeID, label: "Light")
-                        previewTile(appearance.darkThemeID, label: "Dark")
-                    }
-                }
-                SettingsSection(title: "Pairing table", symbol: "arrow.left.arrow.right") {
-                    Text("Choosing a light theme above picks its partner below as the dark one. Edit any pair.")
-                        .font(.caption).foregroundStyle(theme.secondaryText)
-                    let table = ThemePairing.table(for: store.themes, overrides: appearance.pairs)
-                    ForEach(table.keys.sorted(), id: \.self) { light in
-                        SettingsRow(title: store.name(of: light)) {
-                            Picker("Pair for \(light)", selection: Binding(get: { table[light] ?? "" }, set: { dark in
-                                var copy = controller.themeAppearance
-                                copy.pairs[light] = dark
-                                controller.updateThemeAppearance(copy)
-                            })) {
+                    SettingsSection(title: "Pair", symbol: "rectangle.on.rectangle") {
+                        SettingsRow(title: "Light theme") {
+                            Picker("Light theme", selection: binding(\.lightThemeID)) {
+                                Text("Style Colors").tag("")
+                                ForEach(store.themes.filter { !$0.isDark }) { Text($0.name).tag($0.id) }
+                            }
+                            .labelsHidden()
+                            .accessibilityIdentifier("themes.lightTheme")
+                        }
+                        SettingsRow(title: "Dark theme") {
+                            Picker("Dark theme", selection: binding(\.darkThemeID)) {
+                                Text("Style Colors").tag("")
                                 ForEach(store.themes.filter(\.isDark)) { Text($0.name).tag($0.id) }
                             }
                             .labelsHidden()
+                            .accessibilityIdentifier("themes.darkTheme")
+                        }
+                        HStack(spacing: 14) {
+                            previewTile(appearance.lightThemeID, label: "Light")
+                            previewTile(appearance.darkThemeID, label: "Dark")
+                        }
+                    }
+                    SettingsSection(title: "Pairing table", symbol: "arrow.left.arrow.right") {
+                        Text("Choosing a light theme above picks its partner below as the dark one. Edit any pair.")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                        let table = ThemePairing.table(for: store.themes, overrides: appearance.pairs)
+                        ForEach(table.keys.sorted(), id: \.self) { light in
+                            WithPerceptionTracking {
+                                SettingsRow(title: store.name(of: light)) {
+                                    Picker("Pair for \(light)", selection: Binding(get: { table[light] ?? "" }, set: { dark in
+                                        var copy = controller.themeAppearance
+                                        copy.pairs[light] = dark
+                                        controller.updateThemeAppearance(copy)
+                                    })) {
+                                        ForEach(store.themes.filter(\.isDark)) { Text($0.name).tag($0.id) }
+                                    }
+                                    .labelsHidden()
+                                }
+                            }
                         }
                     }
                 }
+                .padding(20)
+                .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
-        }
-        .onChange(of: appearance.lightThemeID) { _, light in
-            guard !light.isEmpty else { return }
-            let partner = ThemePairing.partner(of: light, in: store.themes, overrides: appearance.pairs)
-            if partner != appearance.darkThemeID {
-                var copy = appearance
-                copy.darkThemeID = partner
-                controller.updateThemeAppearance(copy)
+            .onChangeCompat(of: appearance.lightThemeID) { _, light in
+                guard !light.isEmpty else { return }
+                let partner = ThemePairing.partner(of: light, in: store.themes, overrides: appearance.pairs)
+                if partner != appearance.darkThemeID {
+                    var copy = appearance
+                    copy.darkThemeID = partner
+                    controller.updateThemeAppearance(copy)
+                }
             }
         }
     }
@@ -473,7 +482,7 @@ struct ThemeAppearanceView: View {
     }
 
     private func timeBinding(_ keyPath: WritableKeyPath<ThemeAppearance, Int>) -> Binding<Date> {
-        Binding(get: {
+        Binding(tracking: {
             Calendar.current.date(byAdding: .minute, value: controller.themeAppearance[keyPath: keyPath],
                                   to: Calendar.current.startOfDay(for: Date())) ?? Date()
         }, set: { date in
@@ -502,7 +511,7 @@ struct ThemeStylingView: View {
     @AppStorage(DesktopSettings.monospacedFontSizeKey) private var monoSize = DesktopSettings.defaultMonospacedFontSize
 
     private func binding<Value>(_ keyPath: WritableKeyPath<DesktopStyling, Value>) -> Binding<Value> {
-        Binding(get: { controller.styling[keyPath: keyPath] }, set: { value in
+        Binding(tracking: { controller.styling[keyPath: keyPath] }, set: { value in
             var copy = controller.styling
             copy[keyPath: keyPath] = value
             controller.updateStyling(copy)
@@ -529,7 +538,7 @@ struct ThemeStylingView: View {
                 .accessibilityIdentifier("themes.styling.\(id).custom")
             }
             if value != nil {
-                Slider(value: Binding(get: { controller.styling[keyPath: keyPath] ?? styleValue }, set: { new in
+                Slider(value: Binding(tracking: { controller.styling[keyPath: keyPath] ?? styleValue }, set: { new in
                     var copy = controller.styling
                     copy[keyPath: keyPath] = (new / step).rounded() * step
                     controller.updateStyling(copy)
@@ -541,107 +550,109 @@ struct ThemeStylingView: View {
     }
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                SettingsSection(title: "Windows", symbol: "macwindow") {
-                    optionalSlider("Corner radius", \.cornerRadius, range: 0...16, step: 1, styleValue: theme.cornerRadius, id: "radius")
-                    optionalSlider("Border width", \.borderWidth, range: 0...4, step: 1, styleValue: 2, id: "border")
-                    SettingsRow(title: "Focus ring") {
-                        Picker("Focus ring", selection: binding(\.focusRing)) {
-                            ForEach(DesktopStyling.FocusRing.allCases) { Text($0.title).tag($0) }
+        WithPerceptionTracking {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    SettingsSection(title: "Windows", symbol: "macwindow") {
+                        optionalSlider("Corner radius", \.cornerRadius, range: 0...16, step: 1, styleValue: theme.cornerRadius, id: "radius")
+                        optionalSlider("Border width", \.borderWidth, range: 0...4, step: 1, styleValue: 2, id: "border")
+                        SettingsRow(title: "Focus ring") {
+                            Picker("Focus ring", selection: binding(\.focusRing)) {
+                                ForEach(DesktopStyling.FocusRing.allCases) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 260)
+                            .accessibilityIdentifier("themes.styling.focusRing")
                         }
-                        .pickerStyle(.segmented)
-                        .frame(width: 260)
-                        .accessibilityIdentifier("themes.styling.focusRing")
+                        SettingsRow(title: "Window shadows") {
+                            Toggle("Window shadows", isOn: binding(\.windowShadows)).labelsHidden()
+                        }
                     }
-                    SettingsRow(title: "Window shadows") {
-                        Toggle("Window shadows", isOn: binding(\.windowShadows)).labelsHidden()
+                    SettingsSection(title: "Tiling", symbol: "rectangle.split.2x1") {
+                        SettingsRow(title: "Inner gap") {
+                            Stepper("\(Int(innerGap)) pt", value: $innerGap, in: 0...24, step: 1).fixedSize()
+                        }
+                        optionalSlider("Outer gap", \.outerGap, range: 0...32, step: 1, styleValue: innerGap * 2, id: "outerGap")
+                        SettingsRow(title: "Zen (no gaps, borders, rounding) ⌃⌥⇧⌫") {
+                            Toggle("Zen", isOn: Binding(tracking: { controller.windowManager.isZen }, set: { on in
+                                withAnimation(DesktopMotion.tile) { controller.windowManager.isZen = on }
+                            }))
+                            .labelsHidden()
+                            .accessibilityIdentifier("themes.styling.zen")
+                        }
                     }
+                    SettingsSection(title: "Panels", symbol: "menubar.rectangle") {
+                        optionalSlider("Panel & dock opacity", \.panelOpacity, range: 0.3...1, step: 0.05, styleValue: 0.85, unit: "", id: "panelOpacity")
+                        SettingsRow(title: "Blur behind panels") {
+                            Toggle("Blur behind panels", isOn: binding(\.panelBlur)).labelsHidden()
+                        }
+                        Text("Panel position follows the layout style (Windows and Kylin at the bottom, macOS and Ubuntu at the top); change the style in Looks or Settings.")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    SettingsSection(title: "Fonts", symbol: "textformat") {
+                        SettingsRow(title: "Desktop font") {
+                            Picker("Desktop font", selection: binding(\.uiFont)) {
+                                ForEach(DesktopStyling.UIFontDesign.allCases) { Text($0.title).tag($0) }
+                            }
+                            .labelsHidden()
+                        }
+                        SettingsRow(title: "Linux apps font") {
+                            Picker("Linux apps font", selection: binding(\.linuxUIFont)) {
+                                Text("Style default").tag(String?.none)
+                                ForEach(DesktopStyling.linuxUIFonts, id: \.self) { Text($0).tag(String?.some($0)) }
+                            }
+                            .labelsHidden()
+                        }
+                        SettingsRow(title: "Terminal font") {
+                            Picker("Terminal font", selection: binding(\.linuxMonoFont)) {
+                                Text("Style default").tag(String?.none)
+                                ForEach(DesktopStyling.linuxMonoFonts, id: \.self) { Text($0).tag(String?.some($0)) }
+                            }
+                            .labelsHidden()
+                        }
+                        SettingsRow(title: "Monospaced size") {
+                            Stepper("\(Int(monoSize)) pt", value: $monoSize, in: DesktopSettings.monospacedFontSizeRange, step: 1)
+                                .fixedSize()
+                        }
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("Text size for Linux apps and terminals: \(Int(controller.styling.fontScale * 100)) %").font(.callout)
+                            Slider(value: Binding(tracking: { controller.styling.fontScale }, set: { value in
+                                var copy = controller.styling
+                                copy.fontScale = (value * 20).rounded() / 20
+                                controller.updateStyling(copy)
+                            }), in: 0.9...1.2)
+                            .tint(theme.accent)
+                        }
+                        Text("The desktop's own text uses the iPad's fonts in the chosen design; Linux apps get the font, size and cursor size through GTK and foot (new windows).")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    SettingsSection(title: "Motion & pointer", symbol: "cursorarrow.motionlines") {
+                        SettingsRow(title: "Animations") {
+                            Picker("Animations", selection: binding(\.animation)) {
+                                ForEach(DesktopStyling.AnimationSpeed.allCases) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.segmented)
+                            .frame(width: 220)
+                        }
+                        SettingsRow(title: "Cursor size in Linux apps") {
+                            Picker("Cursor size", selection: binding(\.cursorSize)) {
+                                Text("Style default").tag(Int?.none)
+                                ForEach(DesktopStyling.cursorSizes, id: \.self) { Text("\($0) px").tag(Int?.some($0)) }
+                            }
+                            .labelsHidden()
+                        }
+                        Text("Reduce Motion in iPadOS settings always wins over the animation choice.")
+                            .font(.caption).foregroundStyle(theme.secondaryText)
+                    }
+                    Button("Reset Styling to Style Defaults") { controller.updateStyling(DesktopStyling()) }
+                        .accessibilityIdentifier("themes.styling.reset")
                 }
-                SettingsSection(title: "Tiling", symbol: "rectangle.split.2x1") {
-                    SettingsRow(title: "Inner gap") {
-                        Stepper("\(Int(innerGap)) pt", value: $innerGap, in: 0...24, step: 1).fixedSize()
-                    }
-                    optionalSlider("Outer gap", \.outerGap, range: 0...32, step: 1, styleValue: innerGap * 2, id: "outerGap")
-                    SettingsRow(title: "Zen (no gaps, borders, rounding) ⌃⌥⇧⌫") {
-                        Toggle("Zen", isOn: Binding(get: { controller.windowManager.isZen }, set: { on in
-                            withAnimation(DesktopMotion.tile) { controller.windowManager.isZen = on }
-                        }))
-                        .labelsHidden()
-                        .accessibilityIdentifier("themes.styling.zen")
-                    }
-                }
-                SettingsSection(title: "Panels", symbol: "menubar.rectangle") {
-                    optionalSlider("Panel & dock opacity", \.panelOpacity, range: 0.3...1, step: 0.05, styleValue: 0.85, unit: "", id: "panelOpacity")
-                    SettingsRow(title: "Blur behind panels") {
-                        Toggle("Blur behind panels", isOn: binding(\.panelBlur)).labelsHidden()
-                    }
-                    Text("Panel position follows the layout style (Windows and Kylin at the bottom, macOS and Ubuntu at the top); change the style in Looks or Settings.")
-                        .font(.caption).foregroundStyle(theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                SettingsSection(title: "Fonts", symbol: "textformat") {
-                    SettingsRow(title: "Desktop font") {
-                        Picker("Desktop font", selection: binding(\.uiFont)) {
-                            ForEach(DesktopStyling.UIFontDesign.allCases) { Text($0.title).tag($0) }
-                        }
-                        .labelsHidden()
-                    }
-                    SettingsRow(title: "Linux apps font") {
-                        Picker("Linux apps font", selection: binding(\.linuxUIFont)) {
-                            Text("Style default").tag(String?.none)
-                            ForEach(DesktopStyling.linuxUIFonts, id: \.self) { Text($0).tag(String?.some($0)) }
-                        }
-                        .labelsHidden()
-                    }
-                    SettingsRow(title: "Terminal font") {
-                        Picker("Terminal font", selection: binding(\.linuxMonoFont)) {
-                            Text("Style default").tag(String?.none)
-                            ForEach(DesktopStyling.linuxMonoFonts, id: \.self) { Text($0).tag(String?.some($0)) }
-                        }
-                        .labelsHidden()
-                    }
-                    SettingsRow(title: "Monospaced size") {
-                        Stepper("\(Int(monoSize)) pt", value: $monoSize, in: DesktopSettings.monospacedFontSizeRange, step: 1)
-                            .fixedSize()
-                    }
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("Text size for Linux apps and terminals: \(Int(controller.styling.fontScale * 100)) %").font(.callout)
-                        Slider(value: Binding(get: { controller.styling.fontScale }, set: { value in
-                            var copy = controller.styling
-                            copy.fontScale = (value * 20).rounded() / 20
-                            controller.updateStyling(copy)
-                        }), in: 0.9...1.2)
-                        .tint(theme.accent)
-                    }
-                    Text("The desktop's own text uses the iPad's fonts in the chosen design; Linux apps get the font, size and cursor size through GTK and foot (new windows).")
-                        .font(.caption).foregroundStyle(theme.secondaryText)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                SettingsSection(title: "Motion & pointer", symbol: "cursorarrow.motionlines") {
-                    SettingsRow(title: "Animations") {
-                        Picker("Animations", selection: binding(\.animation)) {
-                            ForEach(DesktopStyling.AnimationSpeed.allCases) { Text($0.title).tag($0) }
-                        }
-                        .pickerStyle(.segmented)
-                        .frame(width: 220)
-                    }
-                    SettingsRow(title: "Cursor size in Linux apps") {
-                        Picker("Cursor size", selection: binding(\.cursorSize)) {
-                            Text("Style default").tag(Int?.none)
-                            ForEach(DesktopStyling.cursorSizes, id: \.self) { Text("\($0) px").tag(Int?.some($0)) }
-                        }
-                        .labelsHidden()
-                    }
-                    Text("Reduce Motion in iPadOS settings always wins over the animation choice.")
-                        .font(.caption).foregroundStyle(theme.secondaryText)
-                }
-                Button("Reset Styling to Style Defaults") { controller.updateStyling(DesktopStyling()) }
-                    .accessibilityIdentifier("themes.styling.reset")
+                .padding(20)
+                .frame(maxWidth: 720, alignment: .leading)
+                .frame(maxWidth: .infinity)
             }
-            .padding(20)
-            .frame(maxWidth: 720, alignment: .leading)
-            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -658,28 +669,30 @@ struct ThemeLooksView: View {
     @State private var name = ""
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("A look sets the layout style, colour theme, fonts, corners and gaps in one tap.")
-                        .font(.callout).foregroundStyle(theme.secondaryText)
-                    Spacer()
-                    Button("Save Current Look…") {
-                        name = ""
-                        isNaming = true
+        WithPerceptionTracking {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack {
+                        Text("A look sets the layout style, colour theme, fonts, corners and gaps in one tap.")
+                            .font(.callout).foregroundStyle(theme.secondaryText)
+                        Spacer()
+                        Button("Save Current Look…") {
+                            name = ""
+                            isNaming = true
+                        }
+                        .accessibilityIdentifier("themes.looks.save")
                     }
-                    .accessibilityIdentifier("themes.looks.save")
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
+                        ForEach(DesktopLook.builtIn + userLooks) { look in WithPerceptionTracking { lookCard(look) } }
+                    }
                 }
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 290), spacing: 16)], spacing: 18) {
-                    ForEach(DesktopLook.builtIn + userLooks) { look in lookCard(look) }
-                }
+                .padding(20)
             }
-            .padding(20)
-        }
-        .alert("Save Look", isPresented: $isNaming) {
-            TextField("Name", text: $name)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") { save() }
+            .alert("Save Look", isPresented: $isNaming) {
+                TextField("Name", text: $name)
+                Button("Cancel", role: .cancel) {}
+                Button("Save") { save() }
+            }
         }
     }
 

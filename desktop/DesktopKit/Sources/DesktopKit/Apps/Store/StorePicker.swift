@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// The Store's curated collections as tickable cards, for onboarding's Apps step. Nothing is
 /// ticked to begin with; installed apps show as installed.
@@ -10,24 +11,26 @@ struct StorePicker: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
-            if store.index == nil {
-                HStack(spacing: 12) {
-                    ForEach(0..<4, id: \.self) { _ in StoreSkeleton(cornerRadius: 12).frame(height: 64) }
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 18) {
+                if store.index == nil {
+                    HStack(spacing: 12) {
+                        ForEach(0..<4, id: \.self) { _ in StoreSkeleton(cornerRadius: 12).frame(height: 64) }
+                    }
                 }
-            }
-            ForEach(sections, id: \.collection.id) { section in
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(section.collection.title.uppercased())
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.secondaryText)
-                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 8)], alignment: .leading, spacing: 8) {
-                        ForEach(section.apps) { app in tile(app) }
+                ForEach(sections, id: \.collection.id) { section in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(section.collection.title.uppercased())
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(theme.secondaryText)
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 230), spacing: 8)], alignment: .leading, spacing: 8) {
+                            ForEach(section.apps) { app in WithPerceptionTracking { tile(app) } }
+                        }
                     }
                 }
             }
+            .task { await store.start() }
         }
-        .task { await store.start() }
     }
 
     /// Each app appears once, in the first collection that lists it.
@@ -99,35 +102,37 @@ struct StoreSettingsSection: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        SettingsSection(title: "Apps", symbol: "bag") {
-            HStack(spacing: 14) {
-                Image(systemName: "bag.fill")
-                    .font(.system(size: 22, weight: .semibold))
-                    .foregroundStyle(theme.accent.readableLabel)
-                    .frame(width: 48, height: 48)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.accent))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("LinPad Store").font(.system(size: 15, weight: .semibold))
-                    Text(status).font(.system(size: 12)).foregroundStyle(theme.secondaryText).lineLimit(2)
+        WithPerceptionTracking {
+            SettingsSection(title: "Apps", symbol: "bag") {
+                HStack(spacing: 14) {
+                    Image(systemName: "bag.fill")
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(theme.accent.readableLabel)
+                        .frame(width: 48, height: 48)
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(theme.accent))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("LinPad Store").font(.system(size: 15, weight: .semibold))
+                        Text(status).font(.system(size: 12)).foregroundStyle(theme.secondaryText).lineLimit(2)
+                    }
+                    Spacer()
+                    ToolbarTextButton(title: "Open Store", symbol: "arrow.up.forward.app", prominent: true) {
+                        desktop.open(appID: LinPadStoreApp.id, arguments: [:])
+                    }
+                    .accessibilityIdentifier("apps.openStore")
                 }
-                Spacer()
-                ToolbarTextButton(title: "Open Store", symbol: "arrow.up.forward.app", prominent: true) {
-                    desktop.open(appID: LinPadStoreApp.id, arguments: [:])
+                if let job = store.currentJob {
+                    HStack(spacing: 8) {
+                        Text(job.title).font(.system(size: 12, weight: .medium))
+                        StoreProgressBar(fraction: job.fraction).frame(height: 5)
+                        Text(job.statusText).font(.system(size: 11).monospacedDigit()).foregroundStyle(theme.secondaryText).lineLimit(1)
+                    }
                 }
-                .accessibilityIdentifier("apps.openStore")
+                Text("Install real Linux apps from Alpine's repositories: nothing is preinstalled, so LinPad stays as small as what you choose.")
+                    .font(.system(size: 12))
+                    .foregroundStyle(theme.secondaryText)
             }
-            if let job = store.currentJob {
-                HStack(spacing: 8) {
-                    Text(job.title).font(.system(size: 12, weight: .medium))
-                    StoreProgressBar(fraction: job.fraction).frame(height: 5)
-                    Text(job.statusText).font(.system(size: 11).monospacedDigit()).foregroundStyle(theme.secondaryText).lineLimit(1)
-                }
-            }
-            Text("Install real Linux apps from Alpine's repositories: nothing is preinstalled, so LinPad stays as small as what you choose.")
-                .font(.system(size: 12))
-                .foregroundStyle(theme.secondaryText)
+            .task { await store.start() }
         }
-        .task { await store.start() }
     }
 
     private var status: String {

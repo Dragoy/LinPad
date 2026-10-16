@@ -1,4 +1,4 @@
-import Observation
+import Perception
 import SwiftUI
 
 /// A proposed match for one wallpaper: the generated theme, the nearest existing one and
@@ -42,7 +42,7 @@ struct WallpaperMatchProposal: Identifiable, Equatable, Sendable {
 }
 
 /// "Match to Wallpaper": the prompt after a wallpaper change and the auto-match setting.
-@Observable @MainActor
+@Perceptible @MainActor
 final class WallpaperMatchModel {
     static let autoMatchKey = "desktop.wallpaperMatch.auto"
     static let promptLifetime: Duration = .seconds(60)
@@ -56,8 +56,8 @@ final class WallpaperMatchModel {
     var isAnalyzing: Bool { analysesInFlight > 0 }
     private var analysesInFlight = 0
 
-    @ObservationIgnored private let defaults: UserDefaults
-    @ObservationIgnored private var promptTimeout: Task<Void, Never>?
+    @PerceptionIgnored private let defaults: UserDefaults
+    @PerceptionIgnored private var promptTimeout: Task<Void, Never>?
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults

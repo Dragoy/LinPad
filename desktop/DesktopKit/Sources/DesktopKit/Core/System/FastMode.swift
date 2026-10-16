@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 
 /// Fast mode (the native JIT) as the host can request it: on iPadOS through the
@@ -8,7 +9,7 @@ public protocol FastModeControlling: AnyObject {
     var fastMode: FastModeModel { get }
 }
 
-@Observable @MainActor
+@Perceptible @MainActor
 public final class FastModeModel {
     public enum Setting: String, CaseIterable, Identifiable, Sendable {
         /// Ask StikDebug at every launch, before Linux starts.
@@ -51,7 +52,7 @@ public final class FastModeModel {
     public private(set) var status: Status = .idle
     /// Why fast mode can't be requested here, or nil.
     public private(set) var unavailableReason: String?
-    @ObservationIgnored private let retryAction: @MainActor () -> Void
+    @PerceptionIgnored private let retryAction: @MainActor () -> Void
 
     public init(retry: @escaping @MainActor () -> Void) {
         setting = Setting(rawValue: UserDefaults.standard.string(forKey: Self.settingKey) ?? "") ?? .automatic
@@ -149,34 +150,36 @@ struct PerformanceModeRow: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        if let engine = controller.cpuEngine {
-            HStack(spacing: 10) {
-                Image(systemName: engine == .nativeJIT ? "bolt.fill" : "tortoise")
-                    .frame(width: 22)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Performance").font(.system(size: 13))
-                    Text(engine.title)
-                        .font(.system(size: 12))
-                        .foregroundStyle(engine == .nativeJIT ? Color.green : theme.secondaryText)
-                        .accessibilityLabel("Performance: \(engine.title)")
-                        .accessibilityIdentifier("quickSettings.performanceMode")
-                }
-                Spacer()
-                if controller.canExplainFastMode {
-                    Button(controller.fastMode?.status == .enabling ? "Enabling…" : "Enable fast mode") {
-                        controller.dismissAllOverlays()
-                        if let fastMode = controller.fastMode, fastMode.canRetry {
-                            fastMode.retry()
-                            controller.watchFastModeRetry()
-                        } else {
-                            controller.isFastModeHelpPresented = true
-                        }
+        WithPerceptionTracking {
+            if let engine = controller.cpuEngine {
+                HStack(spacing: 10) {
+                    Image(systemName: engine == .nativeJIT ? "bolt.fill" : "tortoise")
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Performance").font(.system(size: 13))
+                        Text(engine.title)
+                            .font(.system(size: 12))
+                            .foregroundStyle(engine == .nativeJIT ? Color.green : theme.secondaryText)
+                            .accessibilityLabel("Performance: \(engine.title)")
+                            .accessibilityIdentifier("quickSettings.performanceMode")
                     }
-                    .disabled(controller.fastMode?.status == .enabling)
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13))
-                    .foregroundStyle(theme.accent)
-                    .accessibilityIdentifier("quickSettings.fastModeHelp")
+                    Spacer()
+                    if controller.canExplainFastMode {
+                        Button(controller.fastMode?.status == .enabling ? "Enabling…" : "Enable fast mode") {
+                            controller.dismissAllOverlays()
+                            if let fastMode = controller.fastMode, fastMode.canRetry {
+                                fastMode.retry()
+                                controller.watchFastModeRetry()
+                            } else {
+                                controller.isFastModeHelpPresented = true
+                            }
+                        }
+                        .disabled(controller.fastMode?.status == .enabling)
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13))
+                        .foregroundStyle(theme.accent)
+                        .accessibilityIdentifier("quickSettings.fastModeHelp")
+                    }
                 }
             }
         }
@@ -189,40 +192,44 @@ struct FastModeHelpSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-                    FastModeHelpText()
+        WithPerceptionTracking {
+            NavigationStack {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        FastModeHelpText()
+                    }
+                    .font(.system(size: 15))
+                    .padding(24)
                 }
-                .font(.system(size: 15))
-                .padding(24)
-            }
-            .navigationTitle("Enable fast mode")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
+                .navigationTitle("Enable fast mode")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
                 }
             }
+            .accessibilityIdentifier("desktop.fastModeHelp")
         }
-        .accessibilityIdentifier("desktop.fastModeHelp")
     }
 }
 
 /// The setup steps, shared by the help sheet and Settings.
 struct FastModeHelpText: View {
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            Text("Linux runs in Compatibility mode: every instruction is emulated. Fast mode translates Linux programs to native ARM64 code and makes them several times faster (about 5x on average).")
-            Text("iPadOS only lets an app create native code while a debugger is attached to it. StikDebug, a separate app, provides that debugger on the iPad itself. Linux for iPad only asks it to attach; it does not include a debugger.")
-            VStack(alignment: .leading, spacing: 10) {
-                step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions.")
-                step(2, "Connect LocalDevVPN.")
-                step(3, "With Settings › Fast mode on Automatic, Linux for iPad opens StikDebug when it starts, StikDebug attaches and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
-                step(4, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")
+        WithPerceptionTracking {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("Linux runs in Compatibility mode: every instruction is emulated. Fast mode translates Linux programs to native ARM64 code and makes them several times faster (about 5x on average).")
+                Text("iPadOS only lets an app create native code while a debugger is attached to it. StikDebug, a separate app, provides that debugger on the iPad itself. Linux for iPad only asks it to attach; it does not include a debugger.")
+                VStack(alignment: .leading, spacing: 10) {
+                    step(1, "Once: install StikDebug and LocalDevVPN, and give StikDebug a pairing file for this iPad (for example made with iloader on a computer). Follow StikDebug's instructions.")
+                    step(2, "Connect LocalDevVPN.")
+                    step(3, "With Settings › Fast mode on Automatic, Linux for iPad opens StikDebug when it starts, StikDebug attaches and returns to the app, and Linux starts with the native JIT. Quick Settings then shows “Performance: Native JIT ✓”.")
+                    step(4, "If that fails, Linux starts in Compatibility mode and offers “Retry fast mode”. A retry after Linux has started speeds up programs started afterwards.")
+                }
+                Text("You can also open StikDebug yourself and select “Linux for iPad” in its app list. Your files and Linux system are the same in both modes.")
+                    .foregroundStyle(.secondary)
             }
-            Text("You can also open StikDebug yourself and select “Linux for iPad” in its app list. Your files and Linux system are the same in both modes.")
-                .foregroundStyle(.secondary)
         }
     }
 

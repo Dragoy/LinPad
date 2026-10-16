@@ -1,9 +1,9 @@
 import Foundation
-import Observation
+import Perception
 
 /// Feeds the panel meters from /proc. Samples run back to back with a pause in between,
 /// so a slow emulator never accumulates overlapping commands.
-@Observable @MainActor
+@Perceptible @MainActor
 final class PanelSystemMonitor {
     private static let interval: Duration = .seconds(3)
 
@@ -15,8 +15,8 @@ final class PanelSystemMonitor {
 
     /// Views that show the numbers (every style's panel meters, the System Monitor widget)
     /// share one sampling loop; it runs while at least one of them is on screen.
-    @ObservationIgnored private var subscribers = 0
-    @ObservationIgnored private var loop: Task<Void, Never>?
+    @PerceptionIgnored private var subscribers = 0
+    @PerceptionIgnored private var loop: Task<Void, Never>?
 
     /// Keeps the shared loop alive until the calling task is cancelled.
     func poll(_ host: any LinuxHost) async {

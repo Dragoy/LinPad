@@ -1,4 +1,4 @@
-import Observation
+import Perception
 import SwiftUI
 import UIKit
 
@@ -37,7 +37,7 @@ enum ExtraKeysRow {
     }
 }
 
-@Observable @MainActor
+@Perceptible @MainActor
 final class OnScreenKeyboard {
     static let shared = OnScreenKeyboard()
 
@@ -48,7 +48,7 @@ final class OnScreenKeyboard {
 
     /// Stands in for the system keyboard; with zero height nothing shows, and hardware keys
     /// still arrive as presses.
-    @ObservationIgnored private lazy var placeholder: UIView = {
+    @PerceptionIgnored private lazy var placeholder: UIView = {
         // Without an explicit zero height UIKit gives a custom input view the keyboard's
         // default height, an empty keyboard-sized block that pushes windows up.
         let view = UIInputView(frame: .zero, inputViewStyle: .default)

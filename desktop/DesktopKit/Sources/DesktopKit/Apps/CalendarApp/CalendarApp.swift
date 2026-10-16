@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 import UIKit
 
 /// The iPad's calendars (EventKit) in a desktop window: month, week and day views, event
@@ -132,18 +133,20 @@ struct CalendarAppView: View {
     private var mode: CalendarViewMode { CalendarViewMode(rawValue: modeID) ?? .month }
 
     var body: some View {
-        Group {
-            if let store = controller?.calendarStore {
-                content(store)
-            } else {
-                AppEmptyState(symbol: "calendar", title: "Calendar needs the desktop.")
+        WithPerceptionTracking {
+            Group {
+                if let store = controller?.calendarStore {
+                    content(store)
+                } else {
+                    AppEmptyState(symbol: "calendar", title: "Calendar needs the desktop.")
+                }
             }
-        }
-        .background(theme.windowBackground)
-        .foregroundStyle(theme.primaryText)
-        .onAppear { context.window.setTitle("Calendar") }
-        .onReceive(NotificationCenter.default.publisher(for: CalendarApp.showDateRequested)) { note in
-            if let day = note.userInfo?[CalendarApp.dateArgument] as? Date { select(day) }
+            .background(theme.windowBackground)
+            .foregroundStyle(theme.primaryText)
+            .onAppear { context.window.setTitle("Calendar") }
+            .onReceive(NotificationCenter.default.publisher(for: CalendarApp.showDateRequested)) { note in
+                if let day = note.userInfo?[CalendarApp.dateArgument] as? Date { select(day) }
+            }
         }
     }
 
@@ -250,12 +253,16 @@ struct CalendarAppView: View {
                               showsWeekNumbers: showsWeekNumbers, onSelect: select)
                 let groups = Dictionary(grouping: store.calendars, by: \.account)
                 ForEach(groups.keys.sorted(), id: \.self) { account in
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(account.isEmpty ? "Calendars" : account)
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(theme.secondaryText)
-                        ForEach(groups[account] ?? []) { info in
-                            calendarRow(info, store: store)
+                    WithPerceptionTracking {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(account.isEmpty ? "Calendars" : account)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(theme.secondaryText)
+                            ForEach(groups[account] ?? []) { info in
+                                WithPerceptionTracking {
+                                    calendarRow(info, store: store)
+                                }
+                            }
                         }
                     }
                 }

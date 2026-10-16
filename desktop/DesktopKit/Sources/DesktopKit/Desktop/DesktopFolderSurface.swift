@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -37,15 +38,15 @@ enum DesktopItem: Identifiable, Equatable {
 
 /// The desktop as a real folder: `~/Desktop` in the guest shows as icons next to the app
 /// launchers, accepts drops from anywhere, and icon positions persist.
-@MainActor @Observable
+@MainActor @Perceptible
 final class DesktopFolderModel {
     static let showIconsKey = "desktop.icons.visible"
 
-    @ObservationIgnored private weak var controller: DesktopController?
-    @ObservationIgnored private var pollTask: Task<Void, Never>?
-    @ObservationIgnored let operations: FileOperations
-    @ObservationIgnored let trash: FileTrash
-    @ObservationIgnored let transfer: GuestTransferService
+    @PerceptionIgnored private weak var controller: DesktopController?
+    @PerceptionIgnored private var pollTask: Task<Void, Never>?
+    @PerceptionIgnored let operations: FileOperations
+    @PerceptionIgnored let trash: FileTrash
+    @PerceptionIgnored let transfer: GuestTransferService
     let desktopPath: String
 
     private(set) var entries: [FileEntry] = []
@@ -59,10 +60,10 @@ final class DesktopFolderModel {
     var dragTranslation: CGSize = .zero
     /// The rubber band's rectangle while selecting with a drag on the empty desktop.
     var rubberBand: CGRect?
-    @ObservationIgnored private var rubberBandBase: Set<String> = []
+    @PerceptionIgnored private var rubberBandBase: Set<String> = []
     /// Style and screen size the layout belongs to; each keeps its own arrangement.
-    @ObservationIgnored private var layoutContext: String?
-    @ObservationIgnored var onRenameRequest: ((FileEntry) -> Void)?
+    @PerceptionIgnored private var layoutContext: String?
+    @PerceptionIgnored var onRenameRequest: ((FileEntry) -> Void)?
 
     private static let pollInterval: Duration = .seconds(10)
 
@@ -636,85 +637,91 @@ struct DesktopFolderSurface: View {
     }
 
     var body: some View {
-        GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                DesktopBackgroundArea(menu: backgroundMenu, onTap: clearSelection, onPinchIn: {
-                    controller.setOverviewPresented(true)
-                }, onBand: { phase, start, point in
-                    switch phase {
-                    case .began: model.beginRubberBand(at: start, additive: KeyboardModifiers.isCommandDown || KeyboardModifiers.isShiftDown)
-                    case .changed: model.updateRubberBand(from: start, to: point)
-                    case .ended: model.endRubberBand()
+        WithPerceptionTracking {
+            GeometryReader { proxy in
+                WithPerceptionTracking {
+                    ZStack(alignment: .topLeading) {
+                        DesktopBackgroundArea(menu: backgroundMenu, onTap: clearSelection, onPinchIn: {
+                            controller.setOverviewPresented(true)
+                        }, onBand: { phase, start, point in
+                            switch phase {
+                            case .began: model.beginRubberBand(at: start, additive: KeyboardModifiers.isCommandDown || KeyboardModifiers.isShiftDown)
+                            case .changed: model.updateRubberBand(from: start, to: point)
+                            case .ended: model.endRubberBand()
+                            }
+                        })
+                        .accessibilityIdentifier("desktop.surface")
+                        if showsIcons {
+                            icons
+                        }
+                        KeyCommandHost(isActive: desktopHasKeys, focusToken: model.selection.count, onKey: model.handle(_:),
+                                       onType: { _ in })
+                            .frame(width: 1, height: 1)
+                            .accessibilityHidden(true)
+                        if let band = model.rubberBand {
+                            Rectangle()
+                                .fill(theme.accent.opacity(0.18))
+                                .overlay(Rectangle().strokeBorder(theme.accent.opacity(0.85), lineWidth: 1))
+                                .frame(width: band.width, height: band.height)
+                                .offset(x: band.minX, y: band.minY)
+                                .allowsHitTesting(false)
+                                .accessibilityIdentifier("desktop.rubberBand")
+                        }
+                        if let target = model.dropTarget {
+                            DropBadge(directory: target == model.trash.filesDirectory ? "Trash" : target,
+                                      operation: DropOperation.forGuestDrag())
+                                .padding(12)
+                                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                                .allowsHitTesting(false)
+                        }
                     }
-                })
-                .accessibilityIdentifier("desktop.surface")
-                if showsIcons {
-                    icons
-                }
-                KeyCommandHost(isActive: desktopHasKeys, focusToken: model.selection.count, onKey: model.handle(_:),
-                               onType: { _ in })
-                    .frame(width: 1, height: 1)
-                    .accessibilityHidden(true)
-                if let band = model.rubberBand {
-                    Rectangle()
-                        .fill(theme.accent.opacity(0.18))
-                        .overlay(Rectangle().strokeBorder(theme.accent.opacity(0.85), lineWidth: 1))
-                        .frame(width: band.width, height: band.height)
-                        .offset(x: band.minX, y: band.minY)
-                        .allowsHitTesting(false)
-                        .accessibilityIdentifier("desktop.rubberBand")
-                }
-                if let target = model.dropTarget {
-                    DropBadge(directory: target == model.trash.filesDirectory ? "Trash" : target,
-                              operation: DropOperation.forGuestDrag())
-                        .padding(12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                        .allowsHitTesting(false)
+                    .coordinateSpace(name: Self.space)
+                    .onAppear { updateContext(proxy) }
+                    .onChangeCompat(of: proxy.size) { _, _ in updateContext(proxy) }
+                    .onChangeCompat(of: style) { _, _ in updateContext(proxy) }
+                    .onChangeCompat(of: iconSize) { _, _ in updateContext(proxy) }
+                    .onDrop(of: [.desktopLauncher] + DragItemProviders.acceptedTypes, delegate: DesktopDropDelegate(model: model))
                 }
             }
-            .coordinateSpace(name: Self.space)
-            .onAppear { updateContext(proxy) }
-            .onChange(of: proxy.size) { _, _ in updateContext(proxy) }
-            .onChange(of: style) { _, _ in updateContext(proxy) }
-            .onChange(of: iconSize) { _, _ in updateContext(proxy) }
-            .onDrop(of: [.desktopLauncher] + DragItemProviders.acceptedTypes, delegate: DesktopDropDelegate(model: model))
-        }
-        .task {
-            DragDropCenter.shared.attach(controller)
-            DragDropCenter.shared.registerDesktopHandler { [model] items, operation in
-                model.receive(items, operation: operation)
+            .task {
+                DragDropCenter.shared.attach(controller)
+                DragDropCenter.shared.registerDesktopHandler { [model] items, operation in
+                    model.receive(items, operation: operation)
+                }
+                controller.desktopKeyHandler = { [model] key in model.handle(key) }
+                model.onRenameRequest = { entry in beginPrompt(.rename(entry), entry.name) }
+                model.start()
             }
-            controller.desktopKeyHandler = { [model] key in model.handle(key) }
-            model.onRenameRequest = { entry in beginPrompt(.rename(entry), entry.name) }
-            model.start()
-        }
-        .onChange(of: model.selection) { _, _ in syncKeyboardFocus() }
-        .onChange(of: controller.windowManager.focusedWindowID) { _, id in
-            if id != nil { model.selection = [] }
-            syncKeyboardFocus()
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in model.refreshSoon() }
-        .onChange(of: controller.windowManager.windows.map(\.id)) { _, _ in
-            DragDropCenter.shared.windowsChanged()
-            model.refreshSoon()
-        }
-        .alert(prompt?.title ?? "", isPresented: isPromptPresented, presenting: prompt) { prompt in
-            TextField("Name", text: $promptText)
-                .textInputAutocapitalization(.never)
-                .autocorrectionDisabled()
-            Button("Cancel", role: .cancel) {}
-            Button(prompt.isRename ? "Rename" : "Create") { commit(prompt) }
-        }
-        .alert(pendingDeletion.count == 1 ? "Permanently delete “\(pendingDeletion.first?.name ?? "")”?"
-                                          : "Permanently delete \(pendingDeletion.count) items?",
-               isPresented: Binding(get: { !pendingDeletion.isEmpty }, set: { if !$0 { pendingDeletion = [] } })) {
-            Button("Delete", role: .destructive) { model.deletePermanently(pendingDeletion) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("This can't be undone.")
-        }
-        .sheet(item: $propertiesTarget, onDismiss: model.refreshSoon) { target in
-            FilePropertiesSheet(path: target.path, operations: model.operations) { propertiesTarget = nil }
+            .onChangeCompat(of: model.selection) { _, _ in syncKeyboardFocus() }
+            .onChangeCompat(of: controller.windowManager.focusedWindowID) { _, id in
+                if id != nil { model.selection = [] }
+                syncKeyboardFocus()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .guestFilesChanged)) { _ in model.refreshSoon() }
+            .onChangeCompat(of: controller.windowManager.windows.map(\.id)) { _, _ in
+                DragDropCenter.shared.windowsChanged()
+                model.refreshSoon()
+            }
+            .alert(prompt?.title ?? "", isPresented: isPromptPresented, presenting: prompt) { prompt in
+                TextField("Name", text: $promptText)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                Button("Cancel", role: .cancel) {}
+                Button(prompt.isRename ? "Rename" : "Create") { commit(prompt) }
+            }
+            .alert(pendingDeletion.count == 1 ? "Permanently delete “\(pendingDeletion.first?.name ?? "")”?"
+                                              : "Permanently delete \(pendingDeletion.count) items?",
+                   isPresented: Binding(get: { !pendingDeletion.isEmpty }, set: { if !$0 { pendingDeletion = [] } })) {
+                Button("Delete", role: .destructive) { model.deletePermanently(pendingDeletion) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This can't be undone.")
+            }
+            .sheet(item: $propertiesTarget, onDismiss: model.refreshSoon) { target in
+                WithPerceptionTracking {
+                    FilePropertiesSheet(path: target.path, operations: model.operations) { propertiesTarget = nil }
+                }
+            }
         }
     }
 
@@ -756,8 +763,10 @@ struct DesktopFolderSurface: View {
                 }
             }
             ForEach(model.items) { item in
-                if let origin = positions[item.id] {
-                    icon(for: item, at: origin, cellSize: cellSize)
+                WithPerceptionTracking {
+                    if let origin = positions[item.id] {
+                        icon(for: item, at: origin, cellSize: cellSize)
+                    }
                 }
             }
         }
@@ -1059,34 +1068,36 @@ private struct DesktopItemIcon: View {
     @Environment(\.desktopTheme) private var theme
 
     var body: some View {
-        VStack(spacing: 6) {
-            Group {
-                switch item {
-                case .app(_, _, let symbol):
-                    AppIcon(iconName: iconName, url: iconURL, symbol: symbol, size: iconSize)
-                case .trash:
-                    AppIcon(iconName: iconName, symbol: "trash", size: iconSize)
-                case .file(let entry):
-                    FileIconView(entry: entry, size: iconSize * 0.77, theme: theme)
-                        .frame(width: iconSize, height: iconSize)
+        WithPerceptionTracking {
+            VStack(spacing: 6) {
+                Group {
+                    switch item {
+                    case .app(_, _, let symbol):
+                        AppIcon(iconName: iconName, url: iconURL, symbol: symbol, size: iconSize)
+                    case .trash:
+                        AppIcon(iconName: iconName, symbol: "trash", size: iconSize)
+                    case .file(let entry):
+                        FileIconView(entry: entry, size: iconSize * 0.77, theme: theme)
+                            .frame(width: iconSize, height: iconSize)
+                    }
                 }
+                .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
+                Text(item.name)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.white)
+                    .multilineTextAlignment(.center)
+                    .lineLimit(2)
+                    .truncationMode(.middle)
+                    .padding(.horizontal, 4)
+                    .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? theme.accent.opacity(0.85) : Color.clear))
+                    .shadow(color: .black.opacity(isSelected ? 0 : 0.8), radius: 2, y: 1)
             }
-            .shadow(color: .black.opacity(0.35), radius: 6, y: 3)
-            Text(item.name)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.white)
-                .multilineTextAlignment(.center)
-                .lineLimit(2)
-                .truncationMode(.middle)
-                .padding(.horizontal, 4)
-                .background(RoundedRectangle(cornerRadius: 4).fill(isSelected ? theme.accent.opacity(0.85) : Color.clear))
-                .shadow(color: .black.opacity(isSelected ? 0 : 0.8), radius: 2, y: 1)
+            .padding(6)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(isDropTarget ? theme.accent.opacity(0.45) : (isSelected ? Color.white.opacity(0.14) : Color.clear)))
+            .opacity(isCut ? 0.5 : 1)
         }
-        .padding(6)
-        .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .fill(isDropTarget ? theme.accent.opacity(0.45) : (isSelected ? Color.white.opacity(0.14) : Color.clear)))
-        .opacity(isCut ? 0.5 : 1)
     }
 }
 

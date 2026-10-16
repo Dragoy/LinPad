@@ -1,6 +1,6 @@
 import Darwin
 import Foundation
-import Observation
+import Perception
 import os
 import UIKit
 
@@ -19,7 +19,7 @@ struct DiagnosticsItem: Identifiable, Equatable {
 /// Settings › Maintenance › Export Diagnostics: gathers versions, memory, logs and crash
 /// reports, redacts them, lets the user review and untick items, then zips what is left for
 /// the share sheet. Nothing is sent anywhere by LinPad itself.
-@Observable @MainActor
+@Perceptible @MainActor
 final class DiagnosticsExportModel {
     enum State: Equatable {
         case idle
@@ -32,9 +32,9 @@ final class DiagnosticsExportModel {
     private(set) var state = State.idle
     var items: [DiagnosticsItem] = []
 
-    @ObservationIgnored private let host: any LinuxHost
-    @ObservationIgnored private let center: DiagnosticsCenter
-    @ObservationIgnored private let outputDirectory: URL
+    @PerceptionIgnored private let host: any LinuxHost
+    @PerceptionIgnored private let center: DiagnosticsCenter
+    @PerceptionIgnored private let outputDirectory: URL
 
     init(host: any LinuxHost, center: DiagnosticsCenter? = nil, outputDirectory: URL? = nil) {
         self.host = host

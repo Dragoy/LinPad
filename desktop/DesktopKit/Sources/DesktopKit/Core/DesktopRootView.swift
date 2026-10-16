@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 
@@ -33,11 +34,16 @@ public struct DesktopRootView: View {
     }
 
     public var body: some View {
-        ZStack {
+        WithPerceptionTracking { root }
+    }
+
+    private var root: some View {
+        let styling = controller.styling
+        return ZStack {
             WallpaperView(store: controller.wallpapers, source: controller.wallpaperSource(),
                           variant: controller.isOverviewPresented ? .blurred : .sharp)
                 .ignoresSafeArea()
-                .onChange(of: controller.visibleWallpaperIDs, initial: true) { _, ids in
+                .onChangeCompat(of: controller.visibleWallpaperIDs, initial: true) { _, ids in
                     controller.wallpapers.ensureDecoded(ids)
                 }
                 .onAppear {
@@ -77,41 +83,41 @@ public struct DesktopRootView: View {
                     GeometryReader { proxy in
                         Color.clear
                             .onAppear { bottomInset = proxy.safeAreaInsets.bottom }
-                            .onChange(of: proxy.safeAreaInsets.bottom) { _, inset in bottomInset = inset }
+                            .onChangeCompat(of: proxy.safeAreaInsets.bottom) { _, inset in bottomInset = inset }
                     }
                 }
         }
-        .onChange(of: styleID, initial: true) { _, id in
+        .onChangeCompat(of: styleID, initial: true) { _, id in
             let style = DesktopStyle.stored(id)
             controller.applyStyle(style, dark: (DesktopAppearance(rawValue: appearanceID) ?? .styleDefault)
                 .isDark(style: style, system: systemColorScheme))
         }
-        .onChange(of: tilingJSON, initial: true) { _, json in
+        .onChangeCompat(of: tilingJSON, initial: true) { _, json in
             guard let states = TilingSettings.decode(json), states != controller.windowManager.tiling else { return }
             withAnimation(DesktopMotion.tile) { controller.windowManager.restoreTiling(states) }
         }
-        .onChange(of: tilingGap, initial: true) { _, gap in
+        .onChangeCompat(of: tilingGap, initial: true) { _, gap in
             withAnimation(DesktopMotion.tile) { controller.windowManager.tilingGap = CGFloat(gap) }
         }
-        .onChange(of: controller.windowManager.currentWorkspace, initial: true) { _, workspace in
+        .onChangeCompat(of: controller.windowManager.currentWorkspace, initial: true) { _, workspace in
             controller.wallpapers.currentWorkspace = workspace
         }
-        .onChange(of: controller.windowManager.focusedWindowID) { _, id in
+        .onChangeCompat(of: controller.windowManager.focusedWindowID) { _, id in
             controller.keyboardFocusChanged(to: id)
             controller.windowFocusChanged(id)
             controller.keyCommands.syncOverlayCommands()
         }
-        .onChange(of: shortcutModifier) { _, _ in
+        .onChangeCompat(of: shortcutModifier) { _, _ in
             controller.keyCommands.syncOverlayCommands()
         }
-        .onChange(of: controller.isOverlayPresented) { _, presented in
+        .onChangeCompat(of: controller.isOverlayPresented) { _, presented in
             controller.keyCommands.syncOverlayCommands()
             if !presented { controller.keyboardFocusChanged(to: controller.windowManager.focusedWindowID) }
         }
-        .onChange(of: controller.switcher.isPresented) { _, _ in
+        .onChangeCompat(of: controller.switcher.isPresented) { _, _ in
             controller.keyCommands.syncOverlayCommands()
         }
-        .onChange(of: controller.desktopHasKeyboardFocus) { _, _ in
+        .onChangeCompat(of: controller.desktopHasKeyboardFocus) { _, _ in
             controller.keyCommands.syncOverlayCommands()
         }
         .task {
@@ -129,11 +135,11 @@ public struct DesktopRootView: View {
         }
         .animation(DesktopMotion.standard, value: controller.boot.isFinished)
         .linPadLinks(controller: controller)
-        .sheet(isPresented: Binding(get: { controller.isFastModeHelpPresented },
+        .sheet(isPresented: Binding(tracking: { controller.isFastModeHelpPresented },
                                     set: { controller.isFastModeHelpPresented = $0 })) {
             FastModeHelpSheet()
         }
-        .onChange(of: isDark, initial: true) { _, dark in
+        .onChangeCompat(of: isDark, initial: true) { _, dark in
             controller.isDarkAppearance = dark
             controller.wallpapers.isDark = dark
             // A colour theme that turns the desktop dark (or light) also switches the style's
@@ -144,12 +150,12 @@ public struct DesktopRootView: View {
             let followsSystem = DesktopAppearance(rawValue: appearanceID) == .system || followsSystemThemeMode
             controller.input.setInterfaceStyle(followsSystem ? .unspecified : (dark ? .dark : .light))
         }
-        .onChange(of: appearanceID) { _, id in
+        .onChangeCompat(of: appearanceID) { _, id in
             let followsSystem = DesktopAppearance(rawValue: id) == .system
             controller.input.setInterfaceStyle(followsSystem ? .unspecified : (isDark ? .dark : .light))
             controller.applyStyle(style, dark: isDark)
         }
-        .onChange(of: metrics, initial: true) { _, value in
+        .onChangeCompat(of: metrics, initial: true) { _, value in
             withAnimation(DesktopMotion.standard) { controller.windowManager.setMetrics(value) }
         }
         .environment(\.desktopTheme, theme)
@@ -160,20 +166,20 @@ public struct DesktopRootView: View {
         .environment(\.desktopIcons, controller.icons)
         .environment(\.desktopWallpapers, controller.wallpapers)
         .environment(\.colorScheme, isDark ? .dark : .light)
-        .fontDesign(controller.styling.uiFont.design)
+        .fontDesignCompat(styling.uiFont.design)
         .transaction { transaction in
-            switch controller.styling.animation {
+            switch styling.animation {
             case .off: transaction.animation = nil
             case .fast: transaction.animation = transaction.animation?.speed(1.8)
             case .normal: break
             }
         }
-        .onChange(of: systemColorScheme, initial: true) { _, _ in
+        .onChangeCompat(of: systemColorScheme, initial: true) { _, _ in
             // The screen's trait is iPadOS's own choice, whatever the desktop forces on its window.
             controller.systemIsDark = UIScreen.main.traitCollection.userInterfaceStyle == .dark
             controller.evaluateThemeAppearance()
         }
-        .onChange(of: followsSystemThemeMode) { _, follows in
+        .onChangeCompat(of: followsSystemThemeMode) { _, follows in
             controller.input.setInterfaceStyle(follows ? .unspecified : (isDark ? .dark : .light))
         }
         .onAppear {
@@ -323,25 +329,27 @@ public struct DesktopRootView: View {
 
     private var desktopArea: some View {
         GeometryReader { proxy in
-            ZStack(alignment: .topLeading) {
-                DesktopInputAnchor(coordinator: controller.input)
-                    .frame(width: proxy.size.width, height: proxy.size.height)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                DesktopSurface(controller: controller)
-                WindowLayer(controller: controller)
-                if let linux = controller.linux {
-                    LinuxPopupLayerHost(bridge: linux)
+            WithPerceptionTracking {
+                ZStack(alignment: .topLeading) {
+                    DesktopInputAnchor(coordinator: controller.input)
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                    DesktopSurface(controller: controller)
+                    WindowLayer(controller: controller)
+                    if let linux = controller.linux {
+                        LinuxPopupLayerHost(bridge: linux)
+                    }
                 }
-            }
-            .coordinateSpace(name: DesktopCoordinateSpace.name)
-            .onAppear {
-                controller.windowManager.desktopGlobalOrigin = proxy.frame(in: .global).origin
-                controller.windowManager.updateDesktopSize(proxy.size)
-            }
-            .onChange(of: proxy.size) { _, size in
-                controller.windowManager.desktopGlobalOrigin = proxy.frame(in: .global).origin
-                controller.windowManager.updateDesktopSize(size)
+                .coordinateSpace(name: DesktopCoordinateSpace.name)
+                .onAppear {
+                    controller.windowManager.desktopGlobalOrigin = proxy.frame(in: .global).origin
+                    controller.windowManager.updateDesktopSize(proxy.size)
+                }
+                .onChangeCompat(of: proxy.size) { _, size in
+                    controller.windowManager.desktopGlobalOrigin = proxy.frame(in: .global).origin
+                    controller.windowManager.updateDesktopSize(size)
+                }
             }
         }
         .clipped()

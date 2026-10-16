@@ -1,6 +1,6 @@
 import CoreLocation
 import Foundation
-import Observation
+import Perception
 
 /// Current conditions and a short forecast from Open-Meteo (no API key).
 struct WeatherReport: Codable, Equatable, Sendable {
@@ -144,7 +144,7 @@ enum OpenMeteo {
 /// The Weather widget's data: the typed city, or else where the iPad is (when the user
 /// allows location while in use). Refreshed at most every 30 minutes, and only while a
 /// Weather widget is on screen.
-@Observable @MainActor
+@Perceptible @MainActor
 final class WeatherModel {
     static let cityKey = "widgets.weather.city"
     static let cacheKey = "widgets.weather.report"
@@ -160,7 +160,7 @@ final class WeatherModel {
         }
     }
 
-    @ObservationIgnored private let locator = OneShotLocator()
+    @PerceptionIgnored private let locator = OneShotLocator()
 
     init() {
         report = UserDefaults.standard.data(forKey: Self.cacheKey).flatMap { try? JSONDecoder().decode(WeatherReport.self, from: $0) }

@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// One app: header with the main action and its progress, what installing costs (measured
 /// in the guest), screenshots, description and the facts.
@@ -14,47 +15,49 @@ struct StoreDetailPage: View {
     @State private var confirmsLargeInstall = false
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 22) {
-                header
-                if model.job(for: app.id) == nil, !model.isInstalled(app) { sizeLine }
-                if let warning = sizeWarning, !model.isInstalled(app) {
-                    InlineBanner(kind: .warning, message: warning)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .accessibilityIdentifier("store.detail.sizeWarning")
-                }
-                if let shots = app.screenshots, !shots.isEmpty, let base = model.index?.mediaBase {
-                    StoreScreenshotStrip(shots: shots, mediaBase: base, height: 230) { nav.screenshot = $0 }
-                        .accessibilityElement(children: .contain)
-                        .accessibilityIdentifier("store.detail.screenshots")
-                }
-                if let note = compatibilityNote {
-                    HStack(alignment: .top, spacing: 10) {
-                        StoreCompatBadge(compatibility: app.compatibility)
-                        Text(note).font(.system(size: 12.5)).foregroundStyle(theme.secondaryText).fixedSize(horizontal: false, vertical: true)
+        WithPerceptionTracking {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    header
+                    if model.job(for: app.id) == nil, !model.isInstalled(app) { sizeLine }
+                    if let warning = sizeWarning, !model.isInstalled(app) {
+                        InlineBanner(kind: .warning, message: warning)
+                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            .accessibilityIdentifier("store.detail.sizeWarning")
                     }
+                    if let shots = app.screenshots, !shots.isEmpty, let base = model.index?.mediaBase {
+                        StoreScreenshotStrip(shots: shots, mediaBase: base, height: 230) { nav.screenshot = $0 }
+                            .accessibilityElement(children: .contain)
+                            .accessibilityIdentifier("store.detail.screenshots")
+                    }
+                    if let note = compatibilityNote {
+                        HStack(alignment: .top, spacing: 10) {
+                            StoreCompatBadge(compatibility: app.compatibility)
+                            Text(note).font(.system(size: 12.5)).foregroundStyle(theme.secondaryText).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    description
+                    facts
                 }
-                description
-                facts
+                .padding(24)
+                .frame(maxWidth: 980, alignment: .leading)
             }
-            .padding(24)
-            .frame(maxWidth: 980, alignment: .leading)
+            .task(id: model.state == nil) { await model.loadPlan(app.id) }
+            .alert("Remove \(app.name)?", isPresented: $confirmsRemoval) {
+                Button("Remove", role: .destructive) { model.remove(app.id) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("The app is uninstalled from Linux. Your files in /root stay.")
+            }
+            .alert("\(app.name) is large", isPresented: $confirmsLargeInstall) {
+                Button("Install") { model.install([app.id]) }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text(sizeWarning ?? "")
+            }
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("store.detail.\(app.id)")
         }
-        .task(id: model.state == nil) { await model.loadPlan(app.id) }
-        .alert("Remove \(app.name)?", isPresented: $confirmsRemoval) {
-            Button("Remove", role: .destructive) { model.remove(app.id) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The app is uninstalled from Linux. Your files in /root stay.")
-        }
-        .alert("\(app.name) is large", isPresented: $confirmsLargeInstall) {
-            Button("Install") { model.install([app.id]) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text(sizeWarning ?? "")
-        }
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("store.detail.\(app.id)")
     }
 
     // MARK: Header

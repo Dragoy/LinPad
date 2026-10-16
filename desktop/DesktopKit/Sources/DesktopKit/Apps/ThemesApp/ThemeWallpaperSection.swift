@@ -1,4 +1,5 @@
 import SwiftUI
+import Perception
 
 /// Themes › Wallpaper: Match to Wallpaper for the current wallpaper, the library (built-ins,
 /// downloads in Application Support/Wallpapers, Photos, Files, Linux pictures, per-workspace
@@ -21,34 +22,36 @@ struct ThemeWallpaperView: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            Picker("Show", selection: $pane) {
-                ForEach(Pane.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 260)
-            .padding(.vertical, 10)
-            .accessibilityIdentifier("themes.wallpaper.pane")
-            theme.separator.frame(height: 1)
-            switch pane {
-            case .library:
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 18) {
-                        matchSection
-                        WallpaperSettingsSection(store: controller.wallpapers, host: context.host)
-                    }
-                    .padding(20)
-                    .frame(maxWidth: 760, alignment: .leading)
-                    .frame(maxWidth: .infinity)
+        WithPerceptionTracking {
+            VStack(spacing: 0) {
+                Picker("Show", selection: $pane) {
+                    ForEach(Pane.allCases) { Text($0.rawValue).tag($0) }
                 }
-            case .wallhaven:
-                WallpapersAppView(context: AppLaunchContext(host: context.host, arguments: [:],
-                                                            window: FixedTitleWindow(base: context.window),
-                                                            desktop: context.desktop))
+                .pickerStyle(.segmented)
+                .frame(width: 260)
+                .padding(.vertical, 10)
+                .accessibilityIdentifier("themes.wallpaper.pane")
+                theme.separator.frame(height: 1)
+                switch pane {
+                case .library:
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 18) {
+                            matchSection
+                            WallpaperSettingsSection(store: controller.wallpapers, host: context.host)
+                        }
+                        .padding(20)
+                        .frame(maxWidth: 760, alignment: .leading)
+                        .frame(maxWidth: .infinity)
+                    }
+                case .wallhaven:
+                    WallpapersAppView(context: AppLaunchContext(host: context.host, arguments: [:],
+                                                                window: FixedTitleWindow(base: context.window),
+                                                                desktop: context.desktop))
+                }
             }
-        }
-        .task(id: source.identifier) {
-            proposal = await controller.makeWallpaperMatch(for: source)
+            .task(id: source.identifier) {
+                proposal = await controller.makeWallpaperMatch(for: source)
+            }
         }
     }
 

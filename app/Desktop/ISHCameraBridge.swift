@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import UIKit
 import os
 
 /// The iPad cameras as the guest's V4L2 devices (`fs/dev_video.c`): /dev/video0 is the
@@ -143,7 +144,9 @@ final class ISHCameraBridge: NSObject, @unchecked Sendable {
         setFrameRate(device, fps: request.fps)
         session.commitConfiguration()
         capture.session = session
-        capture.rotation = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+        if #available(iOS 17.0, *) {
+            capture.rotation = AVCaptureDevice.RotationCoordinator(device: device, previewLayer: nil)
+        }
         capture.output = output
         capture.applyRotation()
         captures[index] = capture
@@ -202,18 +205,24 @@ private final class Capture: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
     let queue: DispatchQueue
     var session = AVCaptureSession()
     var output: AVCaptureVideoDataOutput?
-    var rotation: AVCaptureDevice.RotationCoordinator?
+    var rotation: AnyObject? // AVCaptureDevice.RotationCoordinator, iOS 17+ only
     private var observation: NSKeyValueObservation?
+    private var orientationObserver: NSObjectProtocol?
 
     init(index: Int) {
         self.index = index
         queue = DispatchQueue(label: "ishcamera.frames.\(index)")
     }
 
+    deinit {
+        if let orientationObserver { NotificationCenter.default.removeObserver(orientationObserver) }
+    }
+
     /// Upright frames for the way the iPad is held; the kernel crops portrait frames to
     /// the guest's landscape sizes.
     func applyRotation() {
-        guard let rotation else { return }
+        guard #available(iOS 17.0, *) else { return followDeviceOrientation() }
+        guard let rotation = rotation as? AVCaptureDevice.RotationCoordinator else { return }
         let apply = { [weak self] in
             guard let connection = self?.output?.connection(with: .video) else { return }
             let angle = rotation.videoRotationAngleForHorizonLevelCapture
@@ -223,6 +232,38 @@ private final class Capture: NSObject, AVCaptureVideoDataOutputSampleBufferDeleg
         }
         apply()
         observation = rotation.observe(\.videoRotationAngleForHorizonLevelCapture) { _, _ in apply() }
+    }
+
+    /// iOS 16 has no rotation coordinator: follow the device orientation (the interface
+    /// orientation while the iPad lies flat) through the connection's `videoOrientation`.
+    private func followDeviceOrientation() {
+        let apply = { [weak self] in
+            let video: AVCaptureVideoOrientation
+            switch UIDevice.current.orientation {
+            case .portrait: video = .portrait
+            case .portraitUpsideDown: video = .portraitUpsideDown
+            case .landscapeLeft: video = .landscapeRight
+            case .landscapeRight: video = .landscapeLeft
+            default:
+                let scene = UIApplication.shared.connectedScenes.lazy.compactMap { $0 as? UIWindowScene }.first
+                switch scene?.interfaceOrientation {
+                case .portrait: video = .portrait
+                case .portraitUpsideDown: video = .portraitUpsideDown
+                case .landscapeLeft: video = .landscapeLeft
+                case .landscapeRight: video = .landscapeRight
+                default: return
+                }
+            }
+            guard let self, let connection = self.output?.connection(with: .video),
+                  connection.isVideoOrientationSupported else { return }
+            self.queue.async { connection.videoOrientation = video }
+        }
+        DispatchQueue.main.async { [weak self] in
+            UIDevice.current.beginGeneratingDeviceOrientationNotifications()
+            apply()
+            self?.orientationObserver = NotificationCenter.default.addObserver(
+                forName: UIDevice.orientationDidChangeNotification, object: nil, queue: .main) { _ in apply() }
+        }
     }
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer,
