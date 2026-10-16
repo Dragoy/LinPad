@@ -6,6 +6,7 @@
 //
 
 #include <dlfcn.h>
+#include <objc/message.h>
 #include <sys/stat.h>
 #include <sys/sysctl.h>
 #include <resolv.h>
@@ -314,18 +315,28 @@ static BOOL StikDebugInstalled(void) {
     return [UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:@"stikdebug://"]];
 }
 
-// TrollStore leaves a marker file next to the app bundles it installs (TS_MARKER and
-// TS_LITE_MARKER in TrollStore's Shared/TSUtil.h). Such an install keeps the entitlements
-// of its IPA, get-task-allow included, and TrollStore can enable the JIT for it.
+// TrollStore registers the apps it installs with LaunchServices itself, with the signer
+// of App Store apps ("Apple iPhone OS Application Signing", RootHelper/uicache.m). App Store
+// apps never carry get-task-allow, so that signer plus get-task-allow means TrollStore.
+// Its marker file next to the bundle (_TrollStore) is no use: the sandbox denies reading it.
 static BOOL InstalledWithTrollStore(void) {
     static BOOL result;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        NSString *container = NSBundle.mainBundle.bundlePath.stringByDeletingLastPathComponent;
-        for (NSString *marker in @[@"_TrollStore", @"_TrollStoreLite"]) {
-            if ([NSFileManager.defaultManager fileExistsAtPath:[container stringByAppendingPathComponent:marker]])
-                result = YES;
-        }
+        if (!HasGetTaskAllow())
+            return;
+        Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+        SEL lookup = NSSelectorFromString(@"applicationProxyForIdentifier:");
+        NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
+        if (proxyClass == Nil || bundleID == nil || ![proxyClass respondsToSelector:lookup])
+            return;
+        id (*proxyFor)(id, SEL, NSString *) = (id (*)(id, SEL, NSString *))objc_msgSend;
+        id proxy = proxyFor(proxyClass, lookup, bundleID);
+        if (![proxy respondsToSelector:NSSelectorFromString(@"signerIdentity")])
+            return;
+        NSString *signer = [proxy valueForKey:@"signerIdentity"];
+        result = [signer isEqualToString:@"Apple iPhone OS Application Signing"];
+        NSLog(@"[fast mode] signer: %@, TrollStore install: %@", signer, result ? @"yes" : @"no");
     });
     return result;
 }
@@ -365,13 +376,10 @@ static NSString *FastModeUnavailableReason(void) {
 #if TARGET_OS_SIMULATOR
     return @"The simulator has no StikDebug; fast mode needs an iPad.";
 #else
-    if (InstalledWithTrollStore()) {
-        if (!HasGetTaskAllow())
-            return @"This installation lacks the get-task-allow entitlement, so TrollStore cannot enable the JIT. Install LinPad's release IPA with TrollStore; it has the entitlement.";
-        return nil;
-    }
     if (!HasGetTaskAllow())
-        return @"This installation lacks the get-task-allow entitlement, so no debugger can attach. Install a development-signed build (Xcode, SideStore or iloader).";
+        return @"This installation lacks the get-task-allow entitlement, so no debugger can attach. Install a development-signed build (Xcode, SideStore or iloader), or LinPad's release IPA with TrollStore.";
+    if (InstalledWithTrollStore())
+        return nil;
     if (!StikDebugInstalled()) {
         if (![NSProcessInfo.processInfo isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){17, 4, 0}])
             return TrollStoreSupportsThisOS()

@@ -201,6 +201,7 @@ final class DiagnosticsExportModel {
         line("CPU engine", defaults.string(forKey: LinuxDeviceInfo.cpuEngineKey))
         if let fastMode = (host as? FastModeControlling)?.fastMode {
             line("Fast mode", String(describing: fastMode.status))
+            line("Fast mode helper", String(describing: fastMode.method))
         }
         let memory = Self.memory()
         line("Physical memory", BackupService.bytes(Int64(ProcessInfo.processInfo.physicalMemory)))

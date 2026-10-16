@@ -309,9 +309,12 @@ invalidation generation moved meanwhile. Code writes use the RW view
   Enabled" setting must be on), TrollStore reopens it, `PT_ATTACHEXC`es,
   waits 100 ms and detaches. It services no breakpoints, so no `brk` may be
   issued then; TrollStore never runs on TXM iOS, so this path never takes the
-  universal.js branch. The app recognises such an install by TrollStore's
-  marker file (`_TrollStore` / `_TrollStoreLite`) next to its bundle; the
-  release IPA carries `get-task-allow`, which TrollStore keeps and needs.
+  universal.js branch. The app recognises such an install by its LaunchServices
+  record: TrollStore registers its apps with the App Store signer ("Apple iPhone
+  OS Application Signing"), which together with `get-task-allow` no App Store
+  app has. Its marker file (`_TrollStore`) next to the bundle is not readable
+  from the app's sandbox. The release IPA carries `get-task-allow`, which
+  TrollStore keeps and needs.
   `dynamic-codesigning` is no alternative: TrollStore documents it as banned
   on A12+ since iOS 15.
 * **Simulator**: dual mapping (the simulator is a macOS process). Tested in a
