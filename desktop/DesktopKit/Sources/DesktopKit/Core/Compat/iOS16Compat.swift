@@ -206,7 +206,7 @@ private struct ChangeCompatModifier<Value: Equatable>: ViewModifier {
     }
 }
 
-/// `ContentUnavailableView` (iOS 17) with the same layout, for iOS 16.
+/// `ContentUnavailableView` (iOS 17); on iOS 16 the same layout built by hand.
 struct CompatUnavailableView: View {
     let title: String
     let systemImage: String
@@ -226,7 +226,15 @@ struct CompatUnavailableView: View {
     }
 
     var body: some View {
-        WithPerceptionTracking {
+        if #available(iOS 17, *) {
+            ContentUnavailableView {
+                Label(title, systemImage: systemImage)
+            } description: {
+                if let message { Text(message) }
+            } actions: {
+                actions
+            }
+        } else {
             VStack(spacing: 12) {
                 Image(systemName: systemImage)
                     .font(.system(size: 40, weight: .regular))
@@ -338,6 +346,7 @@ private struct AnyKeyRelay: UIViewRepresentable {
 
     func updateUIView(_ view: AnyKeyRelayView, context: Context) {
         view.action = action
+        view.isActive = isActive
         if isActive, !view.isFirstResponder {
             DispatchQueue.main.async { if view.window != nil { view.becomeFirstResponder() } }
         } else if !isActive, view.isFirstResponder {
@@ -348,11 +357,37 @@ private struct AnyKeyRelay: UIViewRepresentable {
 
 final class AnyKeyRelayView: UIView {
     var action: () -> Void = {}
+    var isActive = false
+
+    private static let relays = NSHashTable<AnyKeyRelayView>.weakObjects()
 
     override var canBecomeFirstResponder: Bool { true }
 
     override func pressesBegan(_ presses: Set<UIPress>, with event: UIPressesEvent?) {
         guard presses.contains(where: { $0.key != nil }) else { return super.pressesBegan(presses, with: event) }
         action()
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil {
+            Self.relays.add(self)
+        } else {
+            Self.relays.remove(self)
+            DispatchQueue.main.async { Self.reassignKeyboard() }
+        }
+    }
+
+    /// A view leaving the window drops first responder, and nothing takes it back: keys
+    /// (and the shell's shortcuts) would stop until the next tap. The keyboard goes to
+    /// another overlay still waiting for a key (the lock screen under a screensaver), else
+    /// back to the desktop's key commands.
+    private static func reassignKeyboard() {
+        guard UIResponder.desktopCurrentFirstResponder == nil else { return }
+        if let next = relays.allObjects.last(where: { $0.isActive && $0.window != nil }) {
+            next.becomeFirstResponder()
+        } else {
+            DesktopKeyCommands.active?.makeReachable()
+        }
     }
 }
