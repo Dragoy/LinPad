@@ -115,7 +115,7 @@ extension View {
 
 
     /// Two-parameter `onChange(of:initial:_:)` (iOS 17) with the same signature.
-    /// iOS 16 keeps the previous value in state.
+    /// iOS 16 keeps the previous value in state and calls the current body's action.
     @ViewBuilder func onChangeCompat<Value: Equatable>(of value: Value, initial: Bool = false,
                                                        _ action: @escaping (Value, Value) -> Void) -> some View {
         if #available(iOS 17, *) {
@@ -182,26 +182,41 @@ extension Perceptible where Self: AnyObject {
     }
 }
 
+/// iOS 16's `onChange(of:perform:)` runs the closure captured by the render before the
+/// change, so `action` would see the old environment, properties and locals of its view.
+/// The latest action is kept in a reference instead and called from there.
 private struct ChangeCompatModifier<Value: Equatable>: ViewModifier {
     let value: Value
     let initial: Bool
     let action: (Value, Value) -> Void
-    @State private var previous: Value
+    @State private var latest: Latest
+
+    final class Latest {
+        var previous: Value
+        var action: (Value, Value) -> Void
+
+        init(previous: Value, action: @escaping (Value, Value) -> Void) {
+            self.previous = previous
+            self.action = action
+        }
+    }
 
     init(value: Value, initial: Bool, action: @escaping (Value, Value) -> Void) {
         self.value = value
         self.initial = initial
         self.action = action
-        _previous = State(initialValue: value)
+        _latest = State(initialValue: Latest(previous: value, action: action))
     }
 
     func body(content: Content) -> some View {
-        content
-            .onAppear { if initial { action(value, value) } }
+        let latest = latest
+        latest.action = action
+        return content
+            .onAppear { if initial { latest.action(value, value) } }
             .onChange(of: value) { newValue in
-                let old = previous
-                previous = newValue
-                action(old, newValue)
+                let old = latest.previous
+                latest.previous = newValue
+                latest.action(old, newValue)
             }
     }
 }
@@ -326,8 +341,15 @@ final class KeyCommandRelayView: UIView {
 }
 
 extension UIResponder {
-    /// Sent up the responder chain by `KeyCommandRelayView`'s key commands.
+    /// Sent up the responder chain by `KeyCommandRelayView`'s key commands. UIKit matches
+    /// key commands before it delivers presses to the first responder, so an overlay waiting
+    /// for any key (`AnyKeyRelayView`, the lock screen and screensaver) takes the key here
+    /// instead of letting it reach a view underneath.
     @objc func keyCommandRelayPerform(_ sender: UIKeyCommand) {
+        if let anyKey = self as? AnyKeyRelayView {
+            MainActor.assumeIsolated { anyKey.action() }
+            return
+        }
         guard let token = sender.propertyList as? String else { return }
         MainActor.assumeIsolated { KeyCommandRelayView.perform(token) }
     }
