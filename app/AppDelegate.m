@@ -6,7 +6,9 @@
 //
 
 #include <dlfcn.h>
+#include <objc/message.h>
 #include <sys/stat.h>
+#include <sys/sysctl.h>
 #include <resolv.h>
 #include <arpa/inet.h>
 #include <netdb.h>
@@ -214,12 +216,14 @@ static const NSTimeInterval kGraceTaskBudget = 25;
 
 @end
 
-#pragma mark - Fast mode (native JIT via StikDebug)
+#pragma mark - Fast mode (native JIT via StikDebug or TrollStore)
 
-// The app never debugs itself: it asks the user-installed StikDebug app, through its
-// documented URL scheme, to attach to this process (StikJIT INTEGRATION.md, "Configure the
-// JIT methods"). StikDebug then runs universal.js where TXM is present, and the JIT's
-// handshake (jit/codemem.c) prepares the code region and detaches.
+// The app never debugs itself: it asks another app, through its URL scheme, to attach to
+// this process. Normally that is the user-installed StikDebug (StikJIT INTEGRATION.md,
+// "Configure the JIT methods"), which runs universal.js where TXM is present; the JIT's
+// handshake (jit/codemem.c) then prepares the code region and detaches. An installation
+// made by TrollStore asks TrollStore instead (iPadOS 14.0–16.6.1, 16.7 RC and 17.0, where
+// StikDebug, 17.4+, does not run).
 
 NSString *const ISHFastModeSettingKey = @"fastMode.setting";
 static NSString *const kFastModeForceAttemptKey = @"fastMode.debugForceAttempt"; // testing: try without StikDebug installed
@@ -311,6 +315,52 @@ static BOOL StikDebugInstalled(void) {
     return [UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:@"stikdebug://"]];
 }
 
+// TrollStore registers the apps it installs with LaunchServices itself, with the signer
+// of App Store apps ("Apple iPhone OS Application Signing", RootHelper/uicache.m). App Store
+// apps never carry get-task-allow, so that signer plus get-task-allow means TrollStore.
+// Its marker file next to the bundle (_TrollStore) is no use: the sandbox denies reading it.
+static BOOL InstalledWithTrollStore(void) {
+    static BOOL result;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        if (!HasGetTaskAllow())
+            return;
+        Class proxyClass = NSClassFromString(@"LSApplicationProxy");
+        SEL lookup = NSSelectorFromString(@"applicationProxyForIdentifier:");
+        NSString *bundleID = NSBundle.mainBundle.bundleIdentifier;
+        if (proxyClass == Nil || bundleID == nil || ![proxyClass respondsToSelector:lookup])
+            return;
+        id (*proxyFor)(id, SEL, NSString *) = (id (*)(id, SEL, NSString *))objc_msgSend;
+        id proxy = proxyFor(proxyClass, lookup, bundleID);
+        if (![proxy respondsToSelector:NSSelectorFromString(@"signerIdentity")])
+            return;
+        NSString *signer = [proxy valueForKey:@"signerIdentity"];
+        result = [signer isEqualToString:@"Apple iPhone OS Application Signing"];
+        NSLog(@"[fast mode] signer: %@, TrollStore install: %@", signer, result ? @"yes" : @"no");
+    });
+    return result;
+}
+
+static NSString *FastModeHelperName(void) {
+    return InstalledWithTrollStore() ? @"TrollStore" : @"StikDebug";
+}
+
+// TrollStore's CoreTrust bug covers iPadOS 14.0 to 16.6.1, 16.7 RC (20H18) and 17.0, not the
+// releases in between (TrollStore README). Only there is TrollStore worth recommending.
+static BOOL TrollStoreSupportsThisOS(void) {
+    NSOperatingSystemVersion v = NSProcessInfo.processInfo.operatingSystemVersion;
+    if (v.majorVersion == 14 || v.majorVersion == 15)
+        return YES;
+    if (v.majorVersion == 16) {
+        if (v.minorVersion < 6 || (v.minorVersion == 6 && v.patchVersion <= 1))
+            return YES;
+        char build[32] = "";
+        size_t len = sizeof(build);
+        return sysctlbyname("kern.osversion", build, &len, NULL, 0) == 0 && strcmp(build, "20H18") == 0;
+    }
+    return v.majorVersion == 17 && v.minorVersion == 0 && v.patchVersion == 0;
+}
+
 static BOOL JITDebugReady(void) {
     bool (*ready)(void) = JITSymbol("ish_jit_debug_ready");
     return ready != NULL && ready();
@@ -320,26 +370,42 @@ static NSString *FastModeUnavailableReason(void) {
     if (JITSymbol("ish_jit_try_enable") == NULL)
         return @"This build does not include the native JIT.";
     if (JITDebugReady())
-        return nil; // launched from StikDebug already
+        return nil; // launched with the JIT already (StikDebug, or TrollStore's Open with JIT)
     if ([NSUserDefaults.standardUserDefaults boolForKey:kFastModeForceAttemptKey])
         return nil;
 #if TARGET_OS_SIMULATOR
     return @"The simulator has no StikDebug; fast mode needs an iPad.";
 #else
     if (!HasGetTaskAllow())
-        return @"This installation lacks the get-task-allow entitlement, so no debugger can attach. Install a development-signed build (Xcode, SideStore or iloader).";
-    if (!StikDebugInstalled())
+        return @"This installation lacks the get-task-allow entitlement, so no debugger can attach. Install a development-signed build (Xcode, SideStore or iloader), or LinPad's release IPA with TrollStore.";
+    if (InstalledWithTrollStore())
+        return nil;
+    if (!StikDebugInstalled()) {
+        if (![NSProcessInfo.processInfo isOperatingSystemAtLeastVersion:(NSOperatingSystemVersion){17, 4, 0}])
+            return TrollStoreSupportsThisOS()
+                ? @"StikDebug needs iPadOS 17.4 or later. TrollStore supports this iPadOS: install LinPad with TrollStore to use fast mode."
+                : @"StikDebug needs iPadOS 17.4 or later, and TrollStore does not support this iPadOS version, so fast mode is not available on this iPad.";
         return @"StikDebug is not installed.";
+    }
     return nil;
 #endif
 }
 
-static NSURL *StikDebugURL(void) {
+static NSURL *FastModeURL(void) {
     NSURLComponents *components = [NSURLComponents new];
-    components.scheme = @"stikdebug";
     components.host = @"enable-jit";
+    NSString *bundleID = NSBundle.mainBundle.bundleIdentifier ?: @"";
+    if (InstalledWithTrollStore()) {
+        // TrollStore 2.0.12+ (its "URL Scheme" setting on): it opens this app, attaches for
+        // 100 ms and detaches, which leaves CS_DEBUGGED set. It answers no breakpoints, so
+        // only the non-TXM path of jit/codemem.c may run; TrollStore never runs on TXM iOS.
+        components.scheme = @"apple-magnifier";
+        components.queryItems = @[[NSURLQueryItem queryItemWithName:@"bundle-id" value:bundleID]];
+        return components.URL;
+    }
+    components.scheme = @"stikdebug";
     NSMutableArray *items = [NSMutableArray arrayWithObjects:
-        [NSURLQueryItem queryItemWithName:@"bundle-id" value:NSBundle.mainBundle.bundleIdentifier ?: @""],
+        [NSURLQueryItem queryItemWithName:@"bundle-id" value:bundleID],
         [NSURLQueryItem queryItemWithName:@"pid" value:[NSString stringWithFormat:@"%d", getpid()]], nil];
     bool (*txm)(void) = JITSymbol("ish_jit_txm_present");
     if (txm != NULL && txm())
@@ -348,7 +414,7 @@ static NSURL *StikDebugURL(void) {
     return components.URL;
 }
 
-/// Asks StikDebug for the JIT and waits for it; `done` runs on the main queue with whether
+/// Asks StikDebug or TrollStore for the JIT and waits for it; `done` runs on the main queue with whether
 /// the JIT is on. Never touches the breakpoint protocol before the debugger is ready
 /// (ish_jit_try_enable checks it again).
 static void RequestFastMode(BOOL afterBoot, void (^done)(BOOL on)) {
@@ -377,22 +443,26 @@ static void RequestFastMode(BOOL afterBoot, void (^done)(BOOL on)) {
     }
     SetFastModeState(ISHFastModeStateEnabling, nil);
     void (^open)(void) = ^{
-        NSURL *url = StikDebugURL();
+        NSURL *url = FastModeURL();
+        NSString *helper = FastModeHelperName();
         NSLog(@"[fast mode] opening %@", url);
         [UIApplication.sharedApplication openURL:url options:@{} completionHandler:^(BOOL opened) {
             if (!opened) {
-                finish(NO, @"StikDebug did not open.");
+                finish(NO, [NSString stringWithFormat:@"%@ did not open.", helper]);
                 return;
             }
-            // Count only time this app runs: while StikDebug is in front we are suspended.
+            // Count only time this app runs: while the helper is in front we are suspended.
             dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
                 BOOL ready = NO;
                 for (int tick = 0; tick < kFastModeWaitTicks && !(ready = JITDebugReady()); tick++)
                     usleep(100000);
                 BOOL on = ready && tryEnable();
+                NSString *late = InstalledWithTrollStore()
+                    ? @"TrollStore did not enable the JIT in time. Is “URL Scheme Enabled” on in TrollStore's settings?"
+                    : @"StikDebug did not enable the JIT in time. Is LocalDevVPN connected?";
                 dispatch_async(dispatch_get_main_queue(), ^{
-                    finish(on, on ? nil : ready ? @"StikDebug attached, but the JIT could not get executable memory."
-                                                : @"StikDebug did not enable the JIT in time. Is LocalDevVPN connected?");
+                    finish(on, on ? nil : ready ? [NSString stringWithFormat:@"%@ attached, but the JIT could not get executable memory.", helper]
+                                                : late);
                 });
             });
         }];
@@ -682,7 +752,7 @@ void SyncHostname(void) {
         boot();
         return;
     }
-    SetBootState(ISHBootPhaseConfiguring, 1, @"Enabling fast mode via StikDebug…", @"");
+    SetBootState(ISHBootPhaseConfiguring, 1, [NSString stringWithFormat:@"Enabling fast mode via %@…", FastModeHelperName()], @"");
     RequestFastMode(NO, ^(BOOL on) {
         RecordBootStat(@"fast_mode", on ? @"on" : (fastModeMessage ?: @"off"));
         SetBootState(ISHBootPhaseConfiguring, 1, @"Configuring…", @"");
@@ -718,6 +788,11 @@ void SyncHostname(void) {
 
 + (BOOL)fastModeHasGetTaskAllow {
     return HasGetTaskAllow();
+}
+
+/// Whether TrollStore installed this copy: then TrollStore, not StikDebug, enables the JIT.
++ (BOOL)fastModeUsesTrollStore {
+    return InstalledWithTrollStore();
 }
 
 + (void)observeFastMode:(void (^)(void))observer {

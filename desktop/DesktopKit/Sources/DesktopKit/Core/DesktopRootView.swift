@@ -137,7 +137,7 @@ public struct DesktopRootView: View {
         .linPadLinks(controller: controller)
         .sheet(isPresented: Binding(tracking: { controller.isFastModeHelpPresented },
                                     set: { controller.isFastModeHelpPresented = $0 })) {
-            FastModeHelpSheet()
+            FastModeHelpSheet(method: controller.fastMode?.method ?? .stikDebug)
         }
         .onChangeCompat(of: isDark, initial: true) { _, dark in
             controller.isDarkAppearance = dark

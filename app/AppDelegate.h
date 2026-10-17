@@ -34,12 +34,14 @@ typedef NS_ENUM(NSInteger, ISHBootPhase) {
 /// `title` is e.g. "Unpacking Linux…", `detail` e.g. "312 of 690 MB · 41,230 files".
 + (void)observeBoot:(void (^)(ISHBootPhase phase, double fraction, NSString *title, NSString *detail))observer;
 
-/// Fast mode: the native JIT, enabled by handing off to the user-installed StikDebug app
-/// (stikdebug://enable-jit URL scheme, universal.js on TXM devices). With the setting on
-/// "automatic" (default), boot waits for it (up to ~20 s), then continues either way.
+/// Fast mode: the native JIT, enabled by handing off to another app that attaches to this
+/// process: the user-installed StikDebug (stikdebug://enable-jit URL scheme, universal.js on
+/// TXM devices), or TrollStore for an installation it made (apple-magnifier://enable-jit).
+/// With the setting on "automatic" (default), boot waits for it (up to ~20 s), then
+/// continues either way.
 typedef NS_ENUM(NSInteger, ISHFastModeState) {
     ISHFastModeStateIdle,       ///< not tried (setting off, unavailable, or not yet)
-    ISHFastModeStateEnabling,   ///< waiting for StikDebug
+    ISHFastModeStateEnabling,   ///< waiting for StikDebug or TrollStore
     ISHFastModeStateOn,         ///< the JIT runs (fastModeNewProgramsOnly: enabled after boot)
     ISHFastModeStateFailed,     ///< the last attempt failed: fastModeMessage says why
 };
@@ -48,11 +50,13 @@ extern NSString *const ISHFastModeSettingKey; ///< NSUserDefaults: @"automatic" 
 + (NSString *)fastModeMessage;
 + (BOOL)fastModeNewProgramsOnly;
 /// nil if fast mode can be requested; otherwise why not (no JIT in this build, no
-/// get-task-allow, StikDebug not installed).
+/// get-task-allow, StikDebug not installed or not supported on this iPadOS).
 + (NSString *)fastModeUnavailableReason;
 /// Whether this installation's signature has get-task-allow, so a debugger can attach.
 + (BOOL)fastModeHasGetTaskAllow;
-/// Asks StikDebug again. After boot, only programs started afterwards use the JIT.
+/// Whether TrollStore installed this copy: then TrollStore, not StikDebug, enables the JIT.
++ (BOOL)fastModeUsesTrollStore;
+/// Asks StikDebug (or TrollStore) again. After boot, only programs started afterwards use the JIT.
 + (void)retryFastMode;
 /// Called on the main queue now and on every fast mode change.
 + (void)observeFastMode:(void (^)(void))observer;

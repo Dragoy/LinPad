@@ -616,15 +616,24 @@ private struct FastModeSettingsSection: View {
                 .buttonStyle(.bordered)
                 .tint(theme.accent)
                 .controlSize(.small)
-                Text("Automatic asks StikDebug for the native JIT each time the app starts, before Linux boots. It needs StikDebug and LocalDevVPN installed, connected and paired with this iPad. The code cache holds translated programs; Firefox wants 256 MB or more, and a larger cache uses more memory. It applies at the next launch.")
+                Text(automaticCaption + " The code cache holds translated programs; Firefox wants 256 MB or more, and a larger cache uses more memory. It applies at the next launch.")
                     .font(.caption)
                     .foregroundStyle(theme.secondaryText)
                     .fixedSize(horizontal: false, vertical: true)
                 if showsHelp {
-                    FastModeHelpText()
+                    FastModeHelpText(method: fastMode.method)
                         .font(.callout)
                 }
             }
+        }
+    }
+
+    private var automaticCaption: String {
+        switch fastMode.method {
+        case .stikDebug:
+            "Automatic asks StikDebug for the native JIT each time the app starts, before Linux boots. It needs StikDebug and LocalDevVPN installed, connected and paired with this iPad."
+        case .trollStore:
+            "Automatic asks TrollStore for the native JIT each time the app starts, before Linux boots. TrollStore's “URL Scheme Enabled” setting must be on."
         }
     }
 

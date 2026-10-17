@@ -13,7 +13,9 @@ final class ISHLinuxHost: LinuxGraphicsHost, LinuxSystemPreparing, FastModeContr
     let homeDirectory = "/root"
     private(set) var hostName: String
     let preparation = LinuxSystemPreparation(phase: .unpacking)
-    let fastMode = FastModeModel { AppDelegate.retryFastMode() }
+    let fastMode = FastModeModel(method: AppDelegate.fastModeUsesTrollStore() ? .trollStore : .stikDebug) {
+        AppDelegate.retryFastMode()
+    }
     private var bootWaiters: [CheckedContinuation<Void, Never>] = []
 
     /// The fakefs keeps file contents in `<root>/data`, at their guest paths, which is
@@ -50,7 +52,7 @@ final class ISHLinuxHost: LinuxGraphicsHost, LinuxSystemPreparing, FastModeContr
         case .unpacking:
             preparation.update(phase: .unpacking, fraction: fraction, title: title, detail: detail)
         case .configuring:
-            // "Configuring…", or "Enabling fast mode via StikDebug…" while boot waits for it
+            // "Configuring…", or "Enabling fast mode via StikDebug…" (or TrollStore) while boot waits for it
             preparation.update(phase: .configuring, fraction: 1, title: title.isEmpty ? "Configuring…" : title,
                                detail: detail)
         case .running:

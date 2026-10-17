@@ -82,7 +82,9 @@ struct OnboardingFastMode: View {
                         Text("Run Linux programs as native ARM64 code, about 5× faster.")
                             .font(.system(.title3, weight: .semibold))
                             .fixedSize(horizontal: false, vertical: true)
-                        Text("iPadOS only allows that while a debugger is attached. LinPad asks StikDebug, a separate app, to attach at launch; it also needs LocalDevVPN and a one-time pairing file. Without it, everything still works in Compatibility mode.")
+                        Text(controller.fastMode?.method == .trollStore
+                             ? "iPadOS only allows that once a debugger has attached. TrollStore installed LinPad and can attach one at launch, with its “URL Scheme Enabled” setting on. Without it, everything still works in Compatibility mode."
+                             : "iPadOS only allows that while a debugger is attached. LinPad asks StikDebug, a separate app, to attach at launch; it also needs LocalDevVPN and a one-time pairing file. Without it, everything still works in Compatibility mode.")
                             .font(.callout)
                             .foregroundStyle(theme.secondaryText)
                             .fixedSize(horizontal: false, vertical: true)

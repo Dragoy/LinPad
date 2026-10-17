@@ -1166,10 +1166,17 @@ def fast_mode_page() -> str:
 <div class="narrow page-head">
   <span class="kicker">Fast mode</span>
   <h1>Fast mode.</h1>
-  <p>Fast mode runs Linux programs as native ARM64 code instead of interpreting them: about 4.8× faster on average in our benchmarks on an M4 Mac. It is optional, and it needs a free helper app called StikDebug.</p>
+  <p>Fast mode runs Linux programs as native ARM64 code instead of interpreting them: about 4.8× faster on average in our benchmarks on an M4 Mac. It is optional, and it needs a helper app: StikDebug on iPadOS 17.4 and later, or TrollStore on the iPadOS versions it supports.</p>
 </div>
 <div class="narrow prose guide" style="padding-bottom:120px">
-  <div class="callout info"><p><b>Why a helper?</b> iPadOS lets an app create native code only while a debugger is attached to it. StikDebug provides that debugger on the iPad itself. LinPad contains no debugger; it only asks StikDebug to attach, through StikDebug's <code>stikdebug://enable-jit</code> link. Without it, everything works, slower, in Compatibility mode.</p></div>
+  <div class="callout info"><p><b>Why a helper?</b> iPadOS lets an app create native code only once a debugger has attached to it. StikDebug provides that debugger on the iPad itself; TrollStore can attach one to the apps it installed. LinPad contains no debugger; it only asks the helper to attach, through StikDebug's <code>stikdebug://enable-jit</code> or TrollStore's <code>apple-magnifier://enable-jit</code> link. Without it, everything works, slower, in Compatibility mode.</p></div>
+
+  <h2 id="which">Which helper?</h2>
+  <ul>
+    <li><b>iPadOS 17.4 or later</b>: StikDebug, set up below.</li>
+    <li><b>iPadOS 14.0 to 16.6.1, 16.7 RC (20H18) or 17.0</b>: StikDebug does not run there. If <a href="https://github.com/opa334/TrollStore">TrollStore</a> 2.0.12 or later is on your iPad, install LinPad with it and follow <a href="#trollstore">fast mode with TrollStore</a>.</li>
+    <li><b>iPadOS 16.7 and 16.7.x, or 17.0.1 to 17.3.x</b>: neither helper runs, so LinPad stays in Compatibility mode.</li>
+  </ul>
 
   <h2 id="once">One-time setup</h2>
   <ol class="steps-list">
@@ -1182,11 +1189,19 @@ def fast_mode_page() -> str:
 
   <h2 id="start">Start LinPad in fast mode</h2>
   <ol class="steps-list">
-    <li><h3>Let LinPad ask (the default)</h3><p>Open LinPad as usual. Its boot screen says “Enabling fast mode via StikDebug…”, StikDebug comes to the front for a moment, then LinPad continues. Settings › Fast Mode is set to “Automatic (StikDebug)” unless you changed it.</p></li>
+    <li><h3>Let LinPad ask (the default)</h3><p>Open LinPad as usual. Its boot screen says “Enabling fast mode via StikDebug…”, StikDebug comes to the front for a moment, then LinPad continues. Settings › Fast Mode is set to “Automatic” unless you changed it.</p></li>
     <li><h3>Or start it from StikDebug</h3><p>Quit LinPad, open StikDebug, tap Enable JIT and pick “Linux for iPad”.</p></li>
   </ol>
   {maybe_shot("fastmode-setup", "Settings › Fast Mode › Set Up: a checklist with a button for each step and “Test now”. Shown in the simulator, which has no StikDebug, so some steps show as missing.")}
   <p>LinPad's own checklist, in Settings › Fast Mode, checks each step it can see: that StikDebug and LocalDevVPN are installed, that the VPN is connected and that your install lets a debugger attach. It cannot see the pairing file. <b>Test now</b> asks StikDebug for fast mode and times a short loop in Linux.</p>
+
+  <h2 id="trollstore">Fast mode with TrollStore</h2>
+  <p>For a copy of LinPad that TrollStore installed, TrollStore enables fast mode itself: no StikDebug, LocalDevVPN or pairing file. LinPad notices that TrollStore installed it and asks TrollStore instead of StikDebug.</p>
+  <ol class="steps-list">
+    <li><h3>Install LinPad with TrollStore</h3><p>Open LinPad's IPA in TrollStore. TrollStore keeps the IPA's <code>get-task-allow</code> entitlement, which it needs to attach; on iPadOS 16 it asks you to turn on Developer Mode for that, and the iPad restarts once.</p></li>
+    <li><h3>Turn on TrollStore's URL scheme</h3><p>In TrollStore › Settings, turn on <b>URL Scheme Enabled</b>. Without it, LinPad's request opens the Magnifier app instead of TrollStore.</p></li>
+    <li><h3>Open LinPad</h3><p>Its boot screen says “Enabling fast mode via TrollStore…”, TrollStore comes to the front for a moment, then LinPad continues. You can also start LinPad from TrollStore's app list with <b>Open with JIT</b>.</p></li>
+  </ol>
 
   <h2 id="check">How to tell it is on</h2>
   <ul>
@@ -1200,12 +1215,13 @@ def fast_mode_page() -> str:
   <details><summary>StikDebug shows a connection or heartbeat error</summary><div><p>LocalDevVPN is not connected, or Wi-Fi is off. Connect both and try again.</p></div></details>
   <details><summary>It worked before, and stopped after an iPadOS update</summary><div><p>Pairing files can stop working after an update or a reset. Make a new one on a computer with the iPad unlocked, and import it in StikDebug again.</p></div></details>
   <details><summary>StikDebug does not open at all when LinPad starts</summary><div><p>Settings › Fast Mode › Status says why: fast mode set to Off, StikDebug not installed, or an install that does not allow a debugger. Reinstall LinPad with SideStore, AltStore, iloader or Xcode, which sign it so a debugger may attach.</p></div></details>
+  <details><summary>With TrollStore, the Magnifier app opens or fast mode stays off</summary><div><p>Turn on <b>URL Scheme Enabled</b> in TrollStore › Settings, then tap <b>Retry fast mode</b>. If TrollStore says it could not enable JIT, reinstall LinPad's release IPA with TrollStore: it carries the <code>get-task-allow</code> entitlement TrollStore needs.</p></div></details>
   <details><summary>LinPad does not launch from StikDebug</summary><div><p>Refresh both apps in SideStore if either has expired, connect LocalDevVPN, and pick “Linux for iPad” in StikDebug's app list again.</p></div></details>
   <p style="margin-top:28px">Fast mode has not been benchmarked on an iPad yet. The 4.8× figure is the geometric mean of our benchmarks on an M4 Mac with the command-line build; Node.js was about 12× faster, <code>tsc</code> 5.4×, <code>vite build</code> 3.5×.</p>
 </div>
 """
     return page(path="/fast-mode/", title="Fast mode guide", body=body, active="fast",
-                description="Turn on LinPad's fast mode (native ARM64 JIT) with StikDebug and LocalDevVPN: setup, how to check it is on, and troubleshooting.")
+                description="Turn on LinPad's fast mode (native ARM64 JIT) with StikDebug and LocalDevVPN, or with TrollStore: setup, how to check it is on, and troubleshooting.")
 
 
 def themes_page(themes: list[dict]) -> str:
