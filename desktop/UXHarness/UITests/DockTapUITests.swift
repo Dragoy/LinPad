@@ -6,11 +6,11 @@ import XCTest
 final class DockTapUITests: XCTestCase {
     private var app: XCUIApplication!
 
-    private func launch(style: String, extra: [String] = []) {
+    private func launch(style: String, autostart: String = "", extra: [String] = []) {
         continueAfterFailure = false
         XCUIDevice.shared.orientation = .landscapeLeft
         app = XCUIApplication()
-        app.launchArguments = ["-desktop.resetSession", "YES", "-desktop.autostart", "", "-desktop.style", style,
+        app.launchArguments = ["-desktop.resetSession", "YES", "-desktop.autostart", autostart, "-desktop.style", style,
                                "-desktop.tiling", "", "-desktop.onboarded", "YES", "-wallhaven.mock", "YES",
                                "-desktop.colorTheme", ""] + extra
         app.launch()
@@ -83,6 +83,16 @@ final class DockTapUITests: XCTestCase {
         waitFor("tap minimizes the Linux window in front") { !isShown(window("linux:firefox")) }
         firefox.tap()
         waitFor("tap restores it") { isShown(window("linux:firefox")) }
+    }
+
+    /// The Linux popup layer lies over every window. With no popup open it must leave the
+    /// windows their touches; on iPadOS 16 it swallowed them all.
+    func testWindowCloseButtonWorksBesideALinuxWindow() {
+        launch(style: "ish", autostart: "files", extra: ["-desktop.fakeLinuxWindow", "firefox"])
+        let files = window("files")
+        waitFor("Files opens", timeout: 20) { isShown(files) }
+        files.descendants(matching: .any).matching(identifier: "desktop.window.close").firstMatch.tap()
+        waitFor("the close button closes Files") { !files.exists }
     }
 
     func testWindowsTaskbarButton() {

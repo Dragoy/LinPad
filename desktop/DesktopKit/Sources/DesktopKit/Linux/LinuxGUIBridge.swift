@@ -79,6 +79,8 @@ final class LinuxGUIBridge {
 
     private(set) var state = State.stopped
     private(set) var applications: [LinuxDesktopEntry] = []
+    /// Whether the popup layer holds an open popup; it takes touches only then (LinuxPopupLayer).
+    var hasPopups = false
 
     @PerceptionIgnored weak var delegate: LinuxGUIBridgeDelegate?
     @PerceptionIgnored private let host: any LinuxGraphicsHost
