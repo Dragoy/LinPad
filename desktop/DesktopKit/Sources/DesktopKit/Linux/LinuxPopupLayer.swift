@@ -1,3 +1,4 @@
+import Perception
 import SwiftUI
 import UIKit
 
@@ -21,9 +22,34 @@ final class LinuxPopupLayer: UIView {
         }
         return nil
     }
+
+    override func didAddSubview(_ subview: UIView) {
+        super.didAddSubview(subview)
+        bridge?.hasPopups = true
+    }
+
+    override func willRemoveSubview(_ subview: UIView) {
+        super.willRemoveSubview(subview)
+        bridge?.hasPopups = subviews.count > 1
+    }
 }
 
-struct LinuxPopupLayerHost: UIViewRepresentable {
+/// The layer takes part in hit testing only while a popup is open. iPadOS 16 keeps a hosted
+/// UIKit view hit-testable across its whole frame even when its `hitTest` returns nil, so an
+/// always-on layer swallowed every touch meant for the windows underneath. While a popup is
+/// open there, a touch outside it only dismisses the popup.
+struct LinuxPopupLayerHost: View {
+    let bridge: LinuxGUIBridge
+
+    var body: some View {
+        WithPerceptionTracking {
+            LinuxPopupLayerView(bridge: bridge)
+                .allowsHitTesting(bridge.hasPopups)
+        }
+    }
+}
+
+private struct LinuxPopupLayerView: UIViewRepresentable {
     let bridge: LinuxGUIBridge
 
     func makeUIView(context: Context) -> LinuxPopupLayer {
