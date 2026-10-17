@@ -6,10 +6,10 @@ strip = 'strip'
 pkg-config = 'pkg-config'
 
 [built-in options]
-c_args = ['-target', 'arm64-apple-ios17.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
-objc_args = ['-target', 'arm64-apple-ios17.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
-c_link_args = ['-target', 'arm64-apple-ios17.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
-objc_link_args = ['-target', 'arm64-apple-ios17.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
+c_args = ['-target', 'arm64-apple-ios16.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
+objc_args = ['-target', 'arm64-apple-ios16.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
+c_link_args = ['-target', 'arm64-apple-ios16.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
+objc_link_args = ['-target', 'arm64-apple-ios16.0', '-isysroot', '/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS27.0.sdk']
 
 [properties]
 needs_exe_wrapper = true
